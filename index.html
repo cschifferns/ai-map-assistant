@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Map Assistant</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      calcite-shell {
+        height: 100%;
+      }
+      arcgis-map {
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+    <!-- ArcGIS Maps SDK for JavaScript 5.0 (CDN) — includes calcite, map components, and AI components -->
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+  </head>
+  <body>
+    <calcite-shell>
+
+      <!-- ── Map ────────────────────────────────────────────────────────── -->
+      <!--
+        Replace item-id with your own ArcGIS Online web map ID.
+        The default below is the Esri "Change in wheat production 2017-2022"
+        demo map used in the official AI Assistant sample.
+        You can find any web map's item-id in its ArcGIS Online item URL.
+      -->
+      <!-- item-id is set via JavaScript after OAuth is registered to avoid a
+           race condition where the map requests auth before SSO is configured -->
+      <arcgis-map id="main-map">
+        <arcgis-zoom slot="top-left"></arcgis-zoom>
+        <arcgis-home slot="top-left"></arcgis-home>
+        <arcgis-expand slot="top-left">
+          <arcgis-legend></arcgis-legend>
+        </arcgis-expand>
+        <arcgis-expand slot="top-right">
+          <arcgis-basemap-gallery></arcgis-basemap-gallery>
+        </arcgis-expand>
+      </arcgis-map>
+
+      <!-- ── AI Assistant side panel ────────────────────────────────────── -->
+      <calcite-shell-panel slot="panel-end" width="l">
+        <calcite-panel heading="AI Map Assistant">
+          <calcite-action
+            slot="header-actions-end"
+            icon="reset"
+            text="Reset map"
+            id="reset-map-btn">
+          </calcite-action>
+          <calcite-tooltip reference-element="reset-map-btn">
+            Restore all layer filters and visibility to their original state
+          </calcite-tooltip>
+          <calcite-action
+            slot="header-actions-end"
+            icon="erase"
+            text="Clear chat"
+            id="clear-chat-btn">
+          </calcite-action>
+          <calcite-tooltip reference-element="clear-chat-btn">
+            Clear the conversation and start a new session with the assistant
+          </calcite-tooltip>
+          <arcgis-assistant
+            id="assistant"
+            log-enabled
+            copy-enabled
+            reference-element="#main-map"
+            heading="AI Map Assistant (Beta)"
+            description="Ask questions about this map in natural language."
+            entry-message="Hello! I can help you explore this map. Try asking me to navigate somewhere, describe what the data shows, or answer questions about the features.">
+
+            <!-- Built-in agents: navigate the map, explore data, answer help Qs -->
+            <arcgis-assistant-navigation-agent></arcgis-assistant-navigation-agent>
+            <arcgis-assistant-data-exploration-agent></arcgis-assistant-data-exploration-agent>
+            <arcgis-assistant-help-agent></arcgis-assistant-help-agent>
+
+          </arcgis-assistant>
+        </calcite-panel>
+      </calcite-shell-panel>
+
+    </calcite-shell>
+
+    <script type="module">
+      const mapEl    = document.getElementById("main-map");
+      const aiEl     = document.getElementById("assistant");
+      const resetMapBtn  = document.getElementById("reset-map-btn");
+      const clearChatBtn = document.getElementById("clear-chat-btn");
+
+      const [OAuthInfo, esriId] = await $arcgis.import([
+        "@arcgis/core/identity/OAuthInfo.js",
+        "@arcgis/core/identity/IdentityManager.js",
+      ]);
+
+      // Register OAuth so IdentityManager redirects through your org's SSO
+      // instead of showing a username/password dialog.
+      esriId.registerOAuthInfos([
+        new OAuthInfo({
+          appId: "e9nz1rqxUWu4cytG",
+          portalUrl: "https://dudek.maps.arcgis.com",
+          popup: false,
+        })
+      ]);
+
+      // Load the web map only after auth is wired up.
+      mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
+
+      // Snapshot original layer state once the map is ready so the reset
+      // button can restore filters, selections, and visibility to their
+      // pre-AI-assistant state.
+      const layerSnapshots = new Map();
+
+      mapEl.addEventListener("arcgisViewReadyChange", () => {
+        mapEl.view.map.allLayers.forEach(layer => {
+          layerSnapshots.set(layer.id, {
+            definitionExpression: layer.definitionExpression ?? "",
+            visible: layer.visible,
+          });
+        });
+
+        aiEl.suggestedPrompts = [
+          "What layers are in this map?",
+          "Zoom to the largest feature.",
+          "Summarize the data visible in the current extent.",
+        ];
+      }, { once: true });
+
+      resetMapBtn.addEventListener("click", () => {
+        mapEl.view?.map.allLayers.forEach(layer => {
+          const snap = layerSnapshots.get(layer.id);
+          if (!snap) return;
+          if ("definitionExpression" in layer) layer.definitionExpression = snap.definitionExpression;
+          layer.visible = snap.visible;
+        });
+      });
+
+      clearChatBtn.addEventListener("click", () => aiEl.clearChatHistory());
+    </script>
+  </body>
+</html>
