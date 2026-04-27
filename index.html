@@ -132,13 +132,33 @@
         ];
       }, { once: true });
 
-      resetMapBtn.addEventListener("click", () => {
-        mapEl.view?.map.allLayers.forEach(layer => {
+      resetMapBtn.addEventListener("click", async () => {
+        const view = mapEl.view;
+        if (!view) return;
+
+        const lvPromises = [];
+
+        view.map.allLayers.forEach(layer => {
+          // Restore visibility and server-side filter from snapshot.
           const snap = layerSnapshots.get(layer.id);
-          if (!snap) return;
-          if ("definitionExpression" in layer) layer.definitionExpression = snap.definitionExpression;
-          layer.visible = snap.visible;
+          if (snap) {
+            layer.visible = snap.visible;
+            if ("definitionExpression" in layer) layer.definitionExpression = snap.definitionExpression;
+          }
+
+          // Clear client-side filter and feature effects — this is what the
+          // AI assistant actually uses when it selects or highlights features.
+          if (layer.type === "feature") {
+            lvPromises.push(
+              view.whenLayerView(layer).then(lv => {
+                if ("filter" in lv) lv.filter = null;
+                if ("featureEffect" in lv) lv.featureEffect = null;
+              }).catch(() => {})
+            );
+          }
         });
+
+        await Promise.all(lvPromises);
       });
 
       clearChatBtn.addEventListener("click", () => aiEl.clearChatHistory());
