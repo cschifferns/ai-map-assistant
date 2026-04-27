@@ -159,6 +159,11 @@
         });
 
         await Promise.all(lvPromises);
+
+        // Clear chat so the assistant doesn't carry over stale context about
+        // what it previously did to the map — otherwise it skips steps it
+        // thinks it already completed.
+        aiEl.clearChatHistory();
       });
 
       clearChatBtn.addEventListener("click", () => aiEl.clearChatHistory());
