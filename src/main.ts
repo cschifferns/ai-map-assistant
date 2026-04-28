@@ -1,4 +1,5 @@
 import { createLandSurveyAgent } from "./agents/landSurveyAgent";
+import { createLandUsePermittingAgent } from "./agents/landUsePermittingAgent";
 
 const mapEl       = document.getElementById("main-map") as HTMLElement & { view: any };
 const aiEl        = document.getElementById("assistant") as HTMLElement & {
@@ -29,24 +30,30 @@ mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
 // ── Custom agent registration ─────────────────────────────────────────────────
 // Wrapped in try-catch so a LangGraph/polyfill failure in the production build
 // doesn't prevent the map and built-in agents from loading.
-try {
-  const landSurveyAgentEl = document.createElement("arcgis-assistant-agent") as HTMLElement & { agent: any };
-  landSurveyAgentEl.agent = createLandSurveyAgent();
-  aiEl.appendChild(landSurveyAgentEl);
-} catch (e) {
-  console.error("[main] Land survey agent failed to register:", e);
+const customAgents: { factory: () => any; label: string }[] = [
+  { factory: createLandSurveyAgent,         label: "Land survey" },
+  { factory: createLandUsePermittingAgent,  label: "Land use & permitting" },
+];
 
-  // Surface the failure to the user so they know the surveying agent is unavailable.
-  const notice = document.createElement("calcite-notice") as HTMLElement;
-  notice.setAttribute("kind", "warning");
-  notice.setAttribute("open", "");
-  notice.setAttribute("scale", "s");
-  (notice as HTMLElement & { style: CSSStyleDeclaration }).style.margin = "8px";
-  const msgEl = document.createElement("div");
-  msgEl.setAttribute("slot", "message");
-  msgEl.textContent = "Land surveying agent failed to load — built-in map agents are still available.";
-  notice.appendChild(msgEl);
-  aiEl.insertAdjacentElement("beforebegin", notice);
+for (const { factory, label } of customAgents) {
+  try {
+    const agentEl = document.createElement("arcgis-assistant-agent") as HTMLElement & { agent: any };
+    agentEl.agent = factory();
+    aiEl.appendChild(agentEl);
+  } catch (e) {
+    console.error(`[main] ${label} agent failed to register:`, e);
+
+    const notice = document.createElement("calcite-notice") as HTMLElement;
+    notice.setAttribute("kind", "warning");
+    notice.setAttribute("open", "");
+    notice.setAttribute("scale", "s");
+    (notice as HTMLElement & { style: CSSStyleDeclaration }).style.margin = "8px";
+    const msgEl = document.createElement("div");
+    msgEl.setAttribute("slot", "message");
+    msgEl.textContent = `${label} agent failed to load — built-in map agents are still available.`;
+    notice.appendChild(msgEl);
+    aiEl.insertAdjacentElement("beforebegin", notice);
+  }
 }
 
 // ── Layer snapshot ────────────────────────────────────────────────────────────
