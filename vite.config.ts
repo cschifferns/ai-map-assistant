@@ -3,20 +3,18 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 import path from "path";
 
 const isDev = process.env.NODE_ENV !== "production";
-const asyncHooksPolyfill = path.join(process.cwd(), "src/polyfills/async-hooks.ts");
+
+// Plain JS polyfill — no TS transform needed, works in both esbuild and Rollup.
+const asyncHooksPolyfill = path.join(process.cwd(), "src/polyfills/async-hooks.js");
 
 export default defineConfig({
-  // GitHub Actions sets VITE_BASE_PATH to /repo-name/; local dev uses root.
   base: process.env.VITE_BASE_PATH ?? "/",
 
-  plugins: [
-    // basicSsl only needed for local HTTPS — GitHub Pages handles its own TLS.
-    isDev ? basicSsl() : null,
-  ].filter(Boolean),
+  plugins: [isDev ? basicSsl() : null].filter(Boolean),
 
   resolve: {
     alias: {
-      // Applied during both dev and production build (Rollup phase).
+      // Applied by Vite's alias resolver (dev server + Rollup build).
       "node:async_hooks": asyncHooksPolyfill,
     },
   },
@@ -25,8 +23,8 @@ export default defineConfig({
     esbuildOptions: {
       plugins: [
         {
-          // Also applied during esbuild pre-bundling (dev only).
-          name: "polyfill-async-hooks",
+          // esbuild pre-bundling phase (dev only).
+          name: "polyfill-async-hooks-esbuild",
           setup(build) {
             build.onResolve({ filter: /^node:async_hooks$/ }, () => ({
               path: asyncHooksPolyfill,
@@ -37,14 +35,22 @@ export default defineConfig({
     },
   },
 
-  server: {
-    port: 8080,
-  },
-
   build: {
     rollupOptions: {
-      // ArcGIS SDK is loaded via CDN — do not bundle it.
       external: [/^@arcgis\//],
+      plugins: [
+        {
+          // Rollup production build phase — intercepts before Rollup can
+          // treat node: imports as Node.js built-ins and skip the alias.
+          name: "polyfill-async-hooks-rollup",
+          resolveId(id) {
+            if (id === "node:async_hooks") return asyncHooksPolyfill;
+            return null;
+          },
+        },
+      ],
     },
   },
+
+  server: { port: 8080 },
 });

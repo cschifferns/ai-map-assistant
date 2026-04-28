@@ -8,14 +8,6 @@ const aiEl        = document.getElementById("assistant") as HTMLElement & {
 const resetMapBtn  = document.getElementById("reset-map-btn")!;
 const clearChatBtn = document.getElementById("clear-chat-btn")!;
 
-// Create and register the land survey agent synchronously — before any awaits
-// and before appending — so .agent is always defined when the arcgis-assistant
-// upgrades the element. Static HTML placement caused a race condition in
-// production where the CDN script upgraded elements before main.ts ran.
-const landSurveyAgentEl = document.createElement("arcgis-assistant-agent") as HTMLElement & { agent: any };
-landSurveyAgentEl.agent = createLandSurveyAgent();
-aiEl.appendChild(landSurveyAgentEl);
-
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
 // SSO instead of showing a username/password dialog.
@@ -34,7 +26,18 @@ esriId.registerOAuthInfos([
 
 mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
 
-// ── Layer snapshot + agent registration ───────────────────────────────────────
+// ── Custom agent registration ─────────────────────────────────────────────────
+// Wrapped in try-catch so a LangGraph/polyfill failure in the production build
+// doesn't prevent the map and built-in agents from loading.
+try {
+  const landSurveyAgentEl = document.createElement("arcgis-assistant-agent") as HTMLElement & { agent: any };
+  landSurveyAgentEl.agent = createLandSurveyAgent();
+  aiEl.appendChild(landSurveyAgentEl);
+} catch (e) {
+  console.error("[main] Land survey agent failed to register:", e);
+}
+
+// ── Layer snapshot ────────────────────────────────────────────────────────────
 const layerSnapshots = new Map<string, { definitionExpression: string; visible: boolean }>();
 
 mapEl.addEventListener(
