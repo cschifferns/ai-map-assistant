@@ -10,6 +10,7 @@
 //   - Tidal and coastal boundary considerations (especially HI)
 // ---------------------------------------------------------------
 
+import Anthropic from "@anthropic-ai/sdk";
 import { Annotation, StateGraph, END } from "@langchain/langgraph";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import type { AgentRegistration } from "@arcgis/ai-components/utils";
@@ -117,17 +118,27 @@ function contentToString(content: BaseMessage["content"]): string {
 // Prevents accidental (or deliberate) giant inputs from running up API costs.
 const MAX_MESSAGE_CHARS = 8_000;
 
+// Module-level singletons — safe to reuse across calls since the Anthropic
+// client holds no session or conversation state.
+const client = getClient();
+const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
+// Cap at 8192 to bound costs even if VITE_MAX_TOKENS is misconfigured.
+const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192);
+
+// Wrap the system prompt as a cacheable content block so Anthropic can skip
+// re-processing its ~1,800 tokens on every turn after the first.
+// Cache TTL is 5 minutes (ephemeral). Stateless: the full prompt is still
+// sent with every request — Anthropic just skips re-processing the cached part.
+const CACHED_SYSTEM: Anthropic.TextBlockParam[] = [
+  { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+];
+
 // ---------------------------------------------------------------
 // Build graph — returns a minimal StateGraph-compatible object
 // that bypasses LangGraph's browser incompatibilities while
 // satisfying the interface arcgis-assistant expects.
 // ---------------------------------------------------------------
 function buildGraph() {
-  const client = getClient();
-  const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
-  // Cap at 8192 to bound costs even if VITE_MAX_TOKENS is misconfigured.
-  const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192);
-
   const graph = new StateGraph(AgentWorkspace)
     .addNode("agent", async (state) => {
       const apiMessages = state.messages
@@ -148,7 +159,7 @@ function buildGraph() {
         const result = await client.messages.create({
           model,
           max_tokens: maxTokens,
-          system: SYSTEM_PROMPT,
+          system: CACHED_SYSTEM,
           messages: apiMessages,
         });
 
