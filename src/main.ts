@@ -8,11 +8,13 @@ const aiEl        = document.getElementById("assistant") as HTMLElement & {
 const resetMapBtn  = document.getElementById("reset-map-btn")!;
 const clearChatBtn = document.getElementById("clear-chat-btn")!;
 
-// Register the land survey agent immediately so the orchestrator includes it
-// in routing from the start. The agent only processes messages so it doesn't
-// need the view at registration time.
-const landSurveyAgentEl = document.getElementById("land-survey-agent-el") as HTMLElement & { agent: any };
+// Create and register the land survey agent synchronously — before any awaits
+// and before appending — so .agent is always defined when the arcgis-assistant
+// upgrades the element. Static HTML placement caused a race condition in
+// production where the CDN script upgraded elements before main.ts ran.
+const landSurveyAgentEl = document.createElement("arcgis-assistant-agent") as HTMLElement & { agent: any };
 landSurveyAgentEl.agent = createLandSurveyAgent();
+aiEl.appendChild(landSurveyAgentEl);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
