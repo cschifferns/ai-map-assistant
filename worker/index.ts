@@ -41,12 +41,13 @@ function isAllowedOrigin(origin: string | null, env: Env): boolean {
   return getAllowedOrigins(env).includes(origin);
 }
 
-function corsHeaders(origin: string): Record<string, string> {
+function corsHeaders(origin: string, allowHeaders?: string | null): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers":
-      "Content-Type, anthropic-version, anthropic-beta, x-api-key",
+    // Reflect whatever headers the browser requests so SDK-injected headers
+    // (x-stainless-os, x-stainless-lang, etc.) are never blocked by preflight.
+    "Access-Control-Allow-Headers": allowHeaders ?? "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -60,7 +61,8 @@ export default {
       if (!isAllowedOrigin(origin, env)) {
         return new Response("Forbidden", { status: 403 });
       }
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+      const requestedHeaders = request.headers.get("Access-Control-Request-Headers");
+      return new Response(null, { status: 204, headers: corsHeaders(origin, requestedHeaders) });
     }
 
     // ── Only POST is accepted ─────────────────────────────────────────────
