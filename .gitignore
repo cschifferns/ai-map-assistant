@@ -1,6 +1,13 @@
 # Claude Code
 .claude/
 
+# Node
+node_modules/
+dist/
+
+# Secrets — never commit the real API key
+.env.local
+
 # Windows
 Thumbs.db
 desktop.ini

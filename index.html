@@ -82,91 +82,15 @@
             <arcgis-assistant-data-exploration-agent></arcgis-assistant-data-exploration-agent>
             <arcgis-assistant-help-agent></arcgis-assistant-help-agent>
 
+            <!-- Custom agent: land surveying expert (agent property set in main.ts) -->
+            <arcgis-assistant-agent id="land-survey-agent-el"></arcgis-assistant-agent>
+
           </arcgis-assistant>
         </calcite-panel>
       </calcite-shell-panel>
 
     </calcite-shell>
 
-    <script type="module">
-      const mapEl    = document.getElementById("main-map");
-      const aiEl     = document.getElementById("assistant");
-      const resetMapBtn  = document.getElementById("reset-map-btn");
-      const clearChatBtn = document.getElementById("clear-chat-btn");
-
-      const [OAuthInfo, esriId] = await $arcgis.import([
-        "@arcgis/core/identity/OAuthInfo.js",
-        "@arcgis/core/identity/IdentityManager.js",
-      ]);
-
-      // Register OAuth so IdentityManager redirects through your org's SSO
-      // instead of showing a username/password dialog.
-      esriId.registerOAuthInfos([
-        new OAuthInfo({
-          appId: "e9nz1rqxUWu4cytG",
-          portalUrl: "https://dudek.maps.arcgis.com",
-          popup: false,
-        })
-      ]);
-
-      // Load the web map only after auth is wired up.
-      mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
-
-      // Snapshot original layer state once the map is ready so the reset
-      // button can restore filters, selections, and visibility to their
-      // pre-AI-assistant state.
-      const layerSnapshots = new Map();
-
-      mapEl.addEventListener("arcgisViewReadyChange", () => {
-        mapEl.view.map.allLayers.forEach(layer => {
-          layerSnapshots.set(layer.id, {
-            definitionExpression: layer.definitionExpression ?? "",
-            visible: layer.visible,
-          });
-        });
-
-        aiEl.suggestedPrompts = [
-          "What layers are in this map?",
-          "Zoom to the largest feature.",
-          "Summarize the data visible in the current extent.",
-        ];
-      }, { once: true });
-
-      resetMapBtn.addEventListener("click", async () => {
-        const view = mapEl.view;
-        if (!view) return;
-
-        const lvPromises = [];
-
-        view.map.allLayers.forEach(layer => {
-          // Restore visibility and server-side filter from snapshot.
-          const snap = layerSnapshots.get(layer.id);
-          if (snap) {
-            layer.visible = snap.visible;
-            if ("definitionExpression" in layer) layer.definitionExpression = snap.definitionExpression;
-          }
-
-          // Clear client-side filter and feature effects — this is what the
-          // AI assistant actually uses when it selects or highlights features.
-          if (layer.type === "feature") {
-            lvPromises.push(
-              view.whenLayerView(layer).then(lv => {
-                if ("filter" in lv) lv.filter = null;
-                if ("featureEffect" in lv) lv.featureEffect = null;
-              }).catch(() => {})
-            );
-          }
-        });
-
-        await Promise.all(lvPromises);
-
-        // Clear chat so the assistant doesn't carry over stale context about
-        // what it previously did to the map — otherwise it skips steps it
-        // thinks it already completed.
-        aiEl.clearChatHistory();
-      });
-
-      clearChatBtn.addEventListener("click", () => aiEl.clearChatHistory());
-    </script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

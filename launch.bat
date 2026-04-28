@@ -1,4 +1,4 @@
 @echo off
-start "AI Map Assistant" powershell -NoExit -ExecutionPolicy Bypass -File "%~dp0serve.ps1"
-timeout /t 2 /nobreak >nul
-start http://localhost:8080
+start "AI Map Assistant" powershell -NoExit -ExecutionPolicy Bypass -Command "$env:PATH = 'C:\Program Files\nodejs;' + $env:PATH; cd '%~dp0'; npm run dev"
+timeout /t 3 /nobreak >nul
+start https://localhost:8080
