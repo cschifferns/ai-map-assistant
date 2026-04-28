@@ -28,9 +28,11 @@ jobs:
 
       - run: npm run build
         env:
-          # Add VITE_ANTHROPIC_API_KEY in repo Settings → Secrets → Actions
-          VITE_ANTHROPIC_API_KEY: ${{ secrets.VITE_ANTHROPIC_API_KEY }}
-          # Sets the base path to /repo-name/ so asset URLs resolve correctly
+          # URL of the Cloudflare Worker proxy — set in repo Settings → Secrets → Actions.
+          # The Anthropic API key lives in the worker as a secret, NOT here.
+          # Never add VITE_ANTHROPIC_API_KEY to this workflow — it would embed the key in the bundle.
+          VITE_PROXY_URL: ${{ secrets.VITE_PROXY_URL }}
+          # Sets the base path to /repo-name/ so asset URLs resolve correctly on GitHub Pages.
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
 
       - uses: actions/upload-pages-artifact@v3

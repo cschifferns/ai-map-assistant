@@ -113,6 +113,10 @@ function contentToString(content: BaseMessage["content"]): string {
     .join("");
 }
 
+// Maximum number of characters allowed in a single user message.
+// Prevents accidental (or deliberate) giant inputs from running up API costs.
+const MAX_MESSAGE_CHARS = 8_000;
+
 // ---------------------------------------------------------------
 // Build graph — returns a minimal StateGraph-compatible object
 // that bypasses LangGraph's browser incompatibilities while
@@ -127,10 +131,16 @@ function buildGraph() {
     .addNode("agent", async (state) => {
       const apiMessages = state.messages
         .filter((m) => m.getType() !== "system")
-        .map((m) => ({
-          role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
-          content: contentToString(m.content),
-        }));
+        .map((m) => {
+          const content = contentToString(m.content);
+          return {
+            role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
+            // Truncate oversized messages rather than forwarding them as-is.
+            content: content.length > MAX_MESSAGE_CHARS
+              ? content.slice(0, MAX_MESSAGE_CHARS) + "\n\n[message truncated]"
+              : content,
+          };
+        });
 
       let text: string;
       try {
@@ -146,8 +156,10 @@ function buildGraph() {
           .map((b) => (b.type === "text" ? b.text : ""))
           .join("");
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        text = `I encountered an error processing your request. Please try again.\n\nDetails: ${message}`;
+        // Log the full error for debugging but never surface internal details
+        // (e.g. API error bodies) to the end user.
+        console.error("[landSurveyAgent] API error:", err);
+        text = "I encountered an error processing your request. Please try again.";
       }
 
       return {

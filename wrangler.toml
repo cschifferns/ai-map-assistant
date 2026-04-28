@@ -1,0 +1,18 @@
+# wrangler.toml — Cloudflare Worker configuration
+#
+# One-time setup:
+#   1. npm install -g wrangler
+#   2. npx wrangler login
+#   3. npx wrangler secret put ANTHROPIC_API_KEY   ← paste your Anthropic key
+#   4. npx wrangler deploy                          ← copy the worker URL
+#   5. Add the worker URL as a GitHub Actions secret named VITE_PROXY_URL
+#      (e.g. https://ai-map-assistant-proxy.<your-account>.workers.dev)
+
+name = "ai-map-assistant-proxy"
+main = "worker/index.ts"
+compatibility_date = "2025-04-01"
+
+[vars]
+# Comma-separated list of origins allowed to call this proxy.
+# Update to match your GitHub Pages URL after first deploy.
+ALLOWED_ORIGINS = "https://cschifferns.github.io"
