@@ -125,7 +125,8 @@ const MAX_MESSAGE_CHARS = 8_000;
 function buildGraph() {
   const client = getClient();
   const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
-  const maxTokens = Number(import.meta.env.VITE_MAX_TOKENS) || 4096;
+  // Cap at 8192 to bound costs even if VITE_MAX_TOKENS is misconfigured.
+  const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192);
 
   const graph = new StateGraph(AgentWorkspace)
     .addNode("agent", async (state) => {
@@ -156,9 +157,9 @@ function buildGraph() {
           .map((b) => (b.type === "text" ? b.text : ""))
           .join("");
       } catch (err) {
-        // Log the full error for debugging but never surface internal details
-        // (e.g. API error bodies) to the end user.
-        console.error("[landSurveyAgent] API error:", err);
+        // Log a summary only — never log the full error object in case it
+        // contains API response bodies with key/quota details.
+        console.error("[landSurveyAgent] API error:", err instanceof Error ? err.message : String(err));
         text = "I encountered an error processing your request. Please try again.";
       }
 

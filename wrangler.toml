@@ -4,9 +4,12 @@
 #   1. npm install -g wrangler
 #   2. npx wrangler login
 #   3. npx wrangler secret put ANTHROPIC_API_KEY   ← paste your Anthropic key
-#   4. npx wrangler deploy                          ← copy the worker URL
-#   5. Add the worker URL as a GitHub Actions secret named VITE_PROXY_URL
+#   4. npx wrangler secret put PROXY_TOKEN         ← paste a random token
+#      Generate one with: openssl rand -hex 32
+#   5. npx wrangler deploy                          ← copy the worker URL
+#   6. Add the worker URL as a GitHub Actions secret named VITE_PROXY_URL
 #      (e.g. https://ai-map-assistant-proxy.<your-account>.workers.dev)
+#   7. Add the same token as a GitHub Actions secret named VITE_PROXY_TOKEN
 
 name = "ai-map-assistant-proxy"
 main = "worker/index.ts"

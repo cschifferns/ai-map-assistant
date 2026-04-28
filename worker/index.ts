@@ -23,9 +23,19 @@ interface Env {
   //   https://cschifferns.github.io
   // Set in wrangler.toml [vars] or as a secret.
   ALLOWED_ORIGINS: string;
+  // Optional shared secret checked against the X-Proxy-Token request header.
+  // Raises the bar for non-browser abuse without requiring user authentication.
+  // Generate with: openssl rand -hex 32
+  // Store as: npx wrangler secret put PROXY_TOKEN
+  // Also add as a GitHub Actions secret named VITE_PROXY_TOKEN.
+  PROXY_TOKEN?: string;
 }
 
 const ANTHROPIC_BASE = "https://api.anthropic.com";
+
+// Allowlist of Anthropic paths this proxy may forward.
+// Prevents the worker from being used as a relay to other API surfaces.
+const ALLOWED_PATHS = new Set(["/v1/messages"]);
 
 // Max request body size (bytes) to prevent abuse / runaway costs.
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB
@@ -75,6 +85,22 @@ export default {
       return new Response("Forbidden", { status: 403 });
     }
 
+    // ── Proxy token check (if configured) ────────────────────────────────
+    // Validates a shared secret sent in X-Proxy-Token. This doesn't prevent
+    // token extraction from the JS bundle, but it blocks untargeted abuse.
+    if (env.PROXY_TOKEN) {
+      const clientToken = request.headers.get("X-Proxy-Token");
+      if (clientToken !== env.PROXY_TOKEN) {
+        return new Response("Forbidden", { status: 403 });
+      }
+    }
+
+    // ── Path allowlist — only proxy known Anthropic endpoints ─────────────
+    const url = new URL(request.url);
+    if (!ALLOWED_PATHS.has(url.pathname)) {
+      return new Response("Not found", { status: 404 });
+    }
+
     // ── Body size guard — prevent giant payloads that inflate costs ───────
     const contentLength = Number(request.headers.get("Content-Length") ?? 0);
     if (contentLength > MAX_BODY_BYTES) {
@@ -88,17 +114,19 @@ export default {
     }
 
     // ── Build forwarded request ───────────────────────────────────────────
-    // Forward the same path (e.g. /v1/messages) to Anthropic.
-    // Replace the browser's placeholder x-api-key with the real secret.
-    const url = new URL(request.url);
-    const anthropicUrl = `${ANTHROPIC_BASE}${url.pathname}${url.search}`;
-
-    const forwardHeaders = new Headers(request.headers);
+    // Build a clean headers object — only pass headers Anthropic needs.
+    // Forwarding all browser headers would leak client metadata to a third party.
+    const forwardHeaders = new Headers();
     forwardHeaders.set("x-api-key", env.ANTHROPIC_API_KEY);
-    // Strip browser-identifying headers before forwarding
-    forwardHeaders.delete("origin");
-    forwardHeaders.delete("referer");
-    forwardHeaders.delete("cookie");
+    const contentType = request.headers.get("content-type");
+    if (contentType) forwardHeaders.set("content-type", contentType);
+    const anthropicVersion = request.headers.get("anthropic-version");
+    if (anthropicVersion) forwardHeaders.set("anthropic-version", anthropicVersion);
+    // anthropic-beta carries optional feature flags (e.g. extended thinking)
+    const anthropicBeta = request.headers.get("anthropic-beta");
+    if (anthropicBeta) forwardHeaders.set("anthropic-beta", anthropicBeta);
+
+    const anthropicUrl = `${ANTHROPIC_BASE}${url.pathname}`;
 
     const upstream = await fetch(anthropicUrl, {
       method: "POST",
@@ -107,6 +135,18 @@ export default {
     });
 
     // ── Return Anthropic's response with CORS headers added ───────────────
+    // On error, return a sanitized response — never forward Anthropic error
+    // bodies which may reveal key status, quota details, or account info.
+    if (!upstream.ok) {
+      return new Response(
+        JSON.stringify({ error: "API request failed", status: upstream.status }),
+        {
+          status: upstream.status,
+          headers: { ...corsHeaders(origin), "content-type": "application/json" },
+        },
+      );
+    }
+
     const responseHeaders = new Headers(upstream.headers);
     for (const [key, value] of Object.entries(corsHeaders(origin))) {
       responseHeaders.set(key, value);

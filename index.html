@@ -4,6 +4,29 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Map Assistant</title>
+    <!--
+      Content Security Policy — restricts which resources the page may load.
+      'unsafe-eval' is required by the ArcGIS Maps SDK (dynamic module loading).
+      'unsafe-inline' for styles is required by the ArcGIS/Calcite Web Components.
+      Tighten these if Esri ships a version that no longer needs them.
+    -->
+    <meta http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self' https://js.arcgis.com 'unsafe-eval';
+        style-src 'self' 'unsafe-inline' https://js.arcgis.com;
+        connect-src 'self'
+          https://*.arcgis.com
+          https://*.arcgisonline.com
+          https://*.workers.dev
+          wss://*.arcgis.com;
+        img-src 'self' data: blob:
+          https://*.arcgis.com
+          https://*.arcgisonline.com;
+        font-src 'self' data: https://js.arcgis.com;
+        worker-src 'self' blob:;
+        frame-src 'none';
+      " />
     <style>
       html,
       body {
