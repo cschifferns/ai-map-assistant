@@ -36,6 +36,7 @@ export default defineConfig({
   },
 
   build: {
+    target: "es2022", // required for top-level await in main.ts
     rollupOptions: {
       external: [/^@arcgis\//],
       plugins: [
