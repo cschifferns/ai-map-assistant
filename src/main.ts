@@ -35,6 +35,15 @@ try {
   aiEl.appendChild(landSurveyAgentEl);
 } catch (e) {
   console.error("[main] Land survey agent failed to register:", e);
+
+  // Surface the failure to the user so they know the surveying agent is unavailable.
+  const notice = document.createElement("calcite-notice") as HTMLElement;
+  notice.setAttribute("kind", "warning");
+  notice.setAttribute("open", "");
+  notice.setAttribute("scale", "s");
+  (notice as HTMLElement & { style: CSSStyleDeclaration }).style.margin = "8px";
+  notice.innerHTML = `<div slot="message">Land surveying agent failed to load — built-in map agents are still available.</div>`;
+  aiEl.insertAdjacentElement("beforebegin", notice);
 }
 
 // ── Layer snapshot ────────────────────────────────────────────────────────────

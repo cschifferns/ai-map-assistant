@@ -104,6 +104,15 @@ const AgentWorkspace = Annotation.Root({
   }),
 });
 
+// Resolve message content to a plain string regardless of whether
+// it is a simple string or a complex content block array.
+function contentToString(content: BaseMessage["content"]): string {
+  if (typeof content === "string") return content;
+  return content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("");
+}
+
 // ---------------------------------------------------------------
 // Build graph — returns a minimal StateGraph-compatible object
 // that bypasses LangGraph's browser incompatibilities while
@@ -111,39 +120,35 @@ const AgentWorkspace = Annotation.Root({
 // ---------------------------------------------------------------
 function buildGraph() {
   const client = getClient();
+  const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
+  const maxTokens = Number(import.meta.env.VITE_MAX_TOKENS) || 4096;
 
   const graph = new StateGraph(AgentWorkspace)
     .addNode("agent", async (state) => {
-      const apiMessages = (state.messages as any[])
-        .filter((m) => {
-          const role = m.role ?? m._getType?.();
-          return role !== "system";
-        })
+      const apiMessages = state.messages
+        .filter((m) => m.getType() !== "system")
         .map((m) => ({
-          role: (
-            m instanceof AIMessage || m.role === "assistant" ? "assistant" : "user"
-          ) as "user" | "assistant",
-          content: String(m.content ?? m.text ?? ""),
+          role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
+          content: contentToString(m.content),
         }));
 
-      // ── Diagnostic: hardcoded reply to isolate format vs API issues ──
-      // If this displays, the format is correct and the issue is the API call.
-      // If this also fails, the issue is in how arcgis-assistant reads the state.
-      console.log("[landSurveyAgent] node running, apiMessages:", apiMessages.length);
+      let text: string;
+      try {
+        const result = await client.messages.create({
+          model,
+          max_tokens: maxTokens,
+          system: SYSTEM_PROMPT,
+          messages: apiMessages,
+        });
 
-      const result = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: apiMessages,
-      });
-
-      const text = result.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b.type === "text" ? b.text : ""))
-        .join("");
-
-      console.log("[landSurveyAgent] Anthropic response length:", text.length);
+        text = result.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b.type === "text" ? b.text : ""))
+          .join("");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        text = `I encountered an error processing your request. Please try again.\n\nDetails: ${message}`;
+      }
 
       return {
         messages: [new AIMessage(text)],
