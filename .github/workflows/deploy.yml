@@ -32,6 +32,9 @@ jobs:
           # The Anthropic API key lives in the worker as a secret, NOT here.
           # Never add VITE_ANTHROPIC_API_KEY to this workflow — it would embed the key in the bundle.
           VITE_PROXY_URL: ${{ secrets.VITE_PROXY_URL }}
+          # Shared secret validated by the Cloudflare Worker on every request.
+          # Must match the PROXY_TOKEN Worker secret set via: npx wrangler secret put PROXY_TOKEN
+          VITE_PROXY_TOKEN: ${{ secrets.VITE_PROXY_TOKEN }}
           # Sets the base path to /repo-name/ so asset URLs resolve correctly on GitHub Pages.
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
 
