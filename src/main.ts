@@ -13,6 +13,7 @@ const featureTablePanel = document.getElementById("feature-table-panel") as HTML
 const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
 const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
 let tableExpanded = false;
+let clearSelection: () => void = () => {};
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
@@ -66,7 +67,7 @@ const layerSnapshots = new Map<string, { definitionExpression: string; visible: 
 
 mapEl.addEventListener(
   "arcgisViewReadyChange",
-  () => {
+  async () => {
     const view = mapEl.view;
 
     // Snapshot original layer state for the reset button.
@@ -102,6 +103,81 @@ mapEl.addEventListener(
       const selected = featureLayers.find((l) => l.id === layerPickerEl.value);
       if (selected) featureTableEl.layer = selected;
     });
+
+    // ── Rectangle selection ───────────────────────────────────────────────
+    const [SketchViewModel, GraphicsLayer] = await $arcgis.import([
+      "@arcgis/core/widgets/Sketch/SketchViewModel.js",
+      "@arcgis/core/layers/GraphicsLayer.js",
+    ]);
+
+    const sketchLayer = new GraphicsLayer({ listMode: "hide" });
+    view.map.add(sketchLayer);
+    const sketchVM = new SketchViewModel({ layer: sketchLayer, view });
+
+    const highlights: any[] = [];
+
+    const selectBtn = document.createElement("calcite-action");
+    selectBtn.setAttribute("icon", "extent");
+    selectBtn.setAttribute("text", "Select features by rectangle");
+    selectBtn.setAttribute("scale", "s");
+    selectBtn.setAttribute("title", "Select features by rectangle");
+
+    const clearBtn = document.createElement("calcite-action");
+    clearBtn.setAttribute("icon", "erase");
+    clearBtn.setAttribute("text", "Clear selection");
+    clearBtn.setAttribute("scale", "s");
+    clearBtn.setAttribute("title", "Clear selection");
+    clearBtn.setAttribute("disabled", "");
+
+    const selectionGroup = document.createElement("div");
+    selectionGroup.style.cssText = "display:flex;flex-direction:column;gap:2px;margin-top:4px;";
+    selectionGroup.appendChild(selectBtn);
+    selectionGroup.appendChild(clearBtn);
+    view.ui.add(selectionGroup, "top-left");
+
+    clearSelection = () => {
+      if (sketchVM.state === "active") sketchVM.cancel();
+      highlights.forEach((h: any) => h.remove());
+      highlights.length = 0;
+      sketchLayer.removeAll();
+      clearBtn.setAttribute("disabled", "");
+    };
+
+    sketchVM.on("create", async (event: any) => {
+      if (event.state !== "complete") return;
+      const geometry = event.graphic.geometry;
+      sketchLayer.removeAll();
+      highlights.forEach((h: any) => h.remove());
+      highlights.length = 0;
+      clearBtn.setAttribute("disabled", "");
+
+      let didSelect = false;
+      const layers: any[] = view.map.allLayers
+        .filter((l: any) => l.type === "feature" && l.visible)
+        .toArray();
+
+      for (const layer of layers) {
+        try {
+          const q = layer.createQuery();
+          q.geometry = geometry;
+          q.spatialRelationship = "intersects";
+          const oids = await layer.queryObjectIds(q);
+          if (oids.length === 0) continue;
+          const lv = await view.whenLayerView(layer);
+          highlights.push(lv.highlight(oids));
+          didSelect = true;
+        } catch { /* layer doesn't support spatial queries */ }
+      }
+
+      if (didSelect) clearBtn.removeAttribute("disabled");
+    });
+
+    selectBtn.addEventListener("click", () => {
+      if (sketchVM.state === "active") sketchVM.cancel();
+      sketchVM.create("rectangle");
+    });
+
+    clearBtn.addEventListener("click", () => clearSelection());
   },
   { once: true },
 );
@@ -118,6 +194,7 @@ collapseTableBtn.addEventListener("click", () => {
 resetMapBtn.addEventListener("click", async () => {
   const view = mapEl.view;
   if (!view) return;
+  clearSelection();
 
   const lvPromises: Promise<void>[] = [];
 
