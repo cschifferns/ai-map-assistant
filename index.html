@@ -111,6 +111,21 @@
             <span>Feature Table</span>
             <calcite-select id="layer-picker" label="Select layer"></calcite-select>
             <calcite-action
+              id="select-rect-btn"
+              icon="extent"
+              text="Select by rectangle"
+              title="Draw a rectangle to select features"
+              scale="s">
+            </calcite-action>
+            <calcite-action
+              id="clear-sel-btn"
+              icon="erase"
+              text="Clear selection"
+              title="Clear selected features"
+              scale="s"
+              disabled>
+            </calcite-action>
+            <calcite-action
               id="collapse-table-btn"
               icon="chevron-down"
               text="Collapse"

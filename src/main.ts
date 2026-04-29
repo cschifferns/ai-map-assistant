@@ -12,15 +12,19 @@ const featureTableEl    = document.getElementById("feature-table") as HTMLElemen
 const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement;
 const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
 const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
+const selectRectBtn    = document.getElementById("select-rect-btn")!;
+const clearSelBtn      = document.getElementById("clear-sel-btn")!;
 let tableExpanded = false;
 let clearSelection: () => void = () => {};
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
 // SSO instead of showing a username/password dialog.
-const [OAuthInfo, esriId] = await $arcgis.import([
+const [OAuthInfo, esriId, SketchViewModel, GraphicsLayer] = await $arcgis.import([
   "@arcgis/core/identity/OAuthInfo.js",
   "@arcgis/core/identity/IdentityManager.js",
+  "@arcgis/core/widgets/Sketch/SketchViewModel.js",
+  "@arcgis/core/layers/GraphicsLayer.js",
 ]);
 
 esriId.registerOAuthInfos([
@@ -67,7 +71,7 @@ const layerSnapshots = new Map<string, { definitionExpression: string; visible: 
 
 mapEl.addEventListener(
   "arcgisViewReadyChange",
-  async () => {
+  () => {
     const view = mapEl.view;
 
     // Snapshot original layer state for the reset button.
@@ -105,42 +109,18 @@ mapEl.addEventListener(
     });
 
     // ── Rectangle selection ───────────────────────────────────────────────
-    const [SketchViewModel, GraphicsLayer] = await $arcgis.import([
-      "@arcgis/core/widgets/Sketch/SketchViewModel.js",
-      "@arcgis/core/layers/GraphicsLayer.js",
-    ]);
-
     const sketchLayer = new GraphicsLayer({ listMode: "hide" });
     view.map.add(sketchLayer);
     const sketchVM = new SketchViewModel({ layer: sketchLayer, view });
 
     const highlights: any[] = [];
 
-    const selectBtn = document.createElement("calcite-action");
-    selectBtn.setAttribute("icon", "extent");
-    selectBtn.setAttribute("text", "Select features by rectangle");
-    selectBtn.setAttribute("scale", "s");
-    selectBtn.setAttribute("title", "Select features by rectangle");
-
-    const clearBtn = document.createElement("calcite-action");
-    clearBtn.setAttribute("icon", "erase");
-    clearBtn.setAttribute("text", "Clear selection");
-    clearBtn.setAttribute("scale", "s");
-    clearBtn.setAttribute("title", "Clear selection");
-    clearBtn.setAttribute("disabled", "");
-
-    const selectionGroup = document.createElement("div");
-    selectionGroup.style.cssText = "display:flex;flex-direction:column;gap:2px;margin-top:4px;";
-    selectionGroup.appendChild(selectBtn);
-    selectionGroup.appendChild(clearBtn);
-    view.ui.add(selectionGroup, "top-left");
-
     clearSelection = () => {
       if (sketchVM.state === "active") sketchVM.cancel();
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
       sketchLayer.removeAll();
-      clearBtn.setAttribute("disabled", "");
+      clearSelBtn.setAttribute("disabled", "");
     };
 
     sketchVM.on("create", async (event: any) => {
@@ -149,7 +129,7 @@ mapEl.addEventListener(
       sketchLayer.removeAll();
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
-      clearBtn.setAttribute("disabled", "");
+      clearSelBtn.setAttribute("disabled", "");
 
       let didSelect = false;
       const layers: any[] = view.map.allLayers
@@ -169,15 +149,15 @@ mapEl.addEventListener(
         } catch { /* layer doesn't support spatial queries */ }
       }
 
-      if (didSelect) clearBtn.removeAttribute("disabled");
+      if (didSelect) clearSelBtn.removeAttribute("disabled");
     });
 
-    selectBtn.addEventListener("click", () => {
+    selectRectBtn.addEventListener("click", () => {
       if (sketchVM.state === "active") sketchVM.cancel();
       sketchVM.create("rectangle");
     });
 
-    clearBtn.addEventListener("click", () => clearSelection());
+    clearSelBtn.addEventListener("click", () => clearSelection());
   },
   { once: true },
 );
