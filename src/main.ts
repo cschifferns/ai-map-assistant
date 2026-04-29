@@ -9,9 +9,10 @@ const aiEl             = document.getElementById("assistant") as HTMLElement & {
 const resetMapBtn      = document.getElementById("reset-map-btn")!;
 const clearChatBtn     = document.getElementById("clear-chat-btn")!;
 const featureTableEl    = document.getElementById("feature-table") as HTMLElement & { layer: any };
-const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement & { collapsed: boolean };
+const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement;
 const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
 const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
+let tableExpanded = false;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
@@ -93,7 +94,8 @@ mapEl.addEventListener(
 
     if (featureLayers.length > 0) {
       featureTableEl.layer = featureLayers[0];
-      featureTablePanel.collapsed = false;
+      featureTablePanel.style.display = "flex";
+      tableExpanded = true;
     }
 
     layerPickerEl.addEventListener("calciteSelectChange", () => {
@@ -106,10 +108,10 @@ mapEl.addEventListener(
 
 // ── Feature table collapse toggle ─────────────────────────────────────────────
 collapseTableBtn.addEventListener("click", () => {
-  const isCollapsed = featureTablePanel.collapsed;
-  featureTablePanel.collapsed = !isCollapsed;
-  collapseTableBtn.icon = isCollapsed ? "chevron-down" : "chevron-up";
-  collapseTableBtn.text = isCollapsed ? "Collapse" : "Expand";
+  tableExpanded = !tableExpanded;
+  featureTablePanel.style.height = tableExpanded ? "260px" : "42px";
+  collapseTableBtn.icon = tableExpanded ? "chevron-down" : "chevron-up";
+  collapseTableBtn.text = tableExpanded ? "Collapse" : "Expand";
 });
 
 // ── Reset map button ──────────────────────────────────────────────────────────

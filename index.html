@@ -39,16 +39,46 @@
       calcite-shell {
         height: 100%;
       }
-      arcgis-map {
+      #center-content {
+        display: flex;
+        flex-direction: column;
         height: 100%;
+        overflow: hidden;
+      }
+      arcgis-map {
+        flex: 1;
+        min-height: 0;
         width: 100%;
       }
-      arcgis-feature-table {
-        height: 100%;
-        width: 100%;
+      #feature-table-panel {
+        flex-shrink: 0;
+        height: 260px;
+        display: none;
+        flex-direction: column;
+        border-top: 2px solid var(--calcite-color-border-1);
+      }
+      #feature-table-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 8px;
+        height: 42px;
+        background: var(--calcite-color-foreground-1);
+        border-bottom: 1px solid var(--calcite-color-border-1);
+        flex-shrink: 0;
+      }
+      #feature-table-toolbar span {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--calcite-color-text-1);
       }
       #layer-picker {
         min-width: 200px;
+      }
+      arcgis-feature-table {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
       }
     </style>
     <!-- ArcGIS Maps SDK for JavaScript 5.0 (CDN) — includes calcite, map components, and AI components -->
@@ -57,28 +87,39 @@
   <body>
     <calcite-shell>
 
-      <!-- ── Map ────────────────────────────────────────────────────────── -->
-      <!--
-        Replace item-id with your own ArcGIS Online web map ID.
-        The default below is the Esri "Change in wheat production 2017-2022"
-        demo map used in the official AI Assistant sample.
-        You can find any web map's item-id in its ArcGIS Online item URL.
-      -->
+      <!-- ── Map + Feature Table (flex column) ────────────────────────── -->
       <!-- item-id is set via JavaScript after OAuth is registered to avoid a
            race condition where the map requests auth before SSO is configured -->
-      <arcgis-map id="main-map">
-        <arcgis-zoom slot="top-left"></arcgis-zoom>
-        <arcgis-home slot="top-left"></arcgis-home>
-        <arcgis-expand slot="top-left">
-          <arcgis-legend></arcgis-legend>
-        </arcgis-expand>
-        <arcgis-expand slot="top-right">
-          <arcgis-layer-list></arcgis-layer-list>
-        </arcgis-expand>
-        <arcgis-expand slot="top-right">
-          <arcgis-basemap-gallery></arcgis-basemap-gallery>
-        </arcgis-expand>
-      </arcgis-map>
+      <div id="center-content">
+        <arcgis-map id="main-map">
+          <arcgis-zoom slot="top-left"></arcgis-zoom>
+          <arcgis-home slot="top-left"></arcgis-home>
+          <arcgis-expand slot="top-left">
+            <arcgis-legend></arcgis-legend>
+          </arcgis-expand>
+          <arcgis-expand slot="top-right">
+            <arcgis-layer-list></arcgis-layer-list>
+          </arcgis-expand>
+          <arcgis-expand slot="top-right">
+            <arcgis-basemap-gallery></arcgis-basemap-gallery>
+          </arcgis-expand>
+        </arcgis-map>
+
+        <!-- Feature table — revealed after the view is ready -->
+        <div id="feature-table-panel">
+          <div id="feature-table-toolbar">
+            <span>Feature Table</span>
+            <calcite-select id="layer-picker" label="Select layer"></calcite-select>
+            <calcite-action
+              id="collapse-table-btn"
+              icon="chevron-down"
+              text="Collapse"
+              style="margin-left: auto;">
+            </calcite-action>
+          </div>
+          <arcgis-feature-table id="feature-table" reference-element="#main-map"></arcgis-feature-table>
+        </div>
+      </div>
 
       <!-- ── AI Assistant side panel ────────────────────────────────────── -->
       <calcite-shell-panel slot="panel-end" width="l">
@@ -117,23 +158,6 @@
 
 
           </arcgis-assistant>
-        </calcite-panel>
-      </calcite-shell-panel>
-
-      <!-- ── Feature Table bottom panel ──────────────────────────────────── -->
-      <calcite-shell-panel slot="panel-bottom" height-scale="m" collapsed id="feature-table-panel">
-        <calcite-panel heading="Feature Table">
-          <calcite-select slot="header-actions-start" id="layer-picker" label="Select layer"></calcite-select>
-          <calcite-action
-            slot="header-actions-end"
-            icon="chevron-down"
-            text="Collapse"
-            id="collapse-table-btn">
-          </calcite-action>
-          <arcgis-feature-table
-            id="feature-table"
-            reference-element="#main-map">
-          </arcgis-feature-table>
         </calcite-panel>
       </calcite-shell-panel>
 
