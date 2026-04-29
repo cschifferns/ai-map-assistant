@@ -361,13 +361,13 @@ function contentToString(content: BaseMessage["content"]): string {
     .join("");
 }
 
-const MAX_MESSAGE_CHARS = 8_000;
+const MAX_MESSAGE_CHARS = 32_000;
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_TOOL_ROUNDS = 5;
 
 const client = getClient();
 const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
-const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192);
+const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 8192, 16384);
 
 const CACHED_SYSTEM: Anthropic.TextBlockParam[] = [
   { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
@@ -402,7 +402,7 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
           role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
           content:
             content.length > MAX_MESSAGE_CHARS
-              ? content.slice(0, MAX_MESSAGE_CHARS) + "\n\n[message truncated]"
+              ? content.slice(0, MAX_MESSAGE_CHARS)
               : content,
         };
       });

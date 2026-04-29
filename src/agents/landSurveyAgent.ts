@@ -34,7 +34,7 @@ surveyors, GIS professionals, and project teams with technical questions.
 - Professional Land Surveyor (PLS) licensing requirements (BPELSG)
 - Record of Survey requirements: when required, filing with county surveyor
 - Corner records and corner perpetuation (PRC §8772)
-- California Coordinate System (CCS83) — zones: Zone 1 (Humboldt) through Zone 6 (Los Angeles)
+- California Coordinate System (CCS83) — zones: Zone 1 (Humboldt) through Zone 6 (Los Angeles/San Diego)
 - NAD83 (2011) epoch 2010.0 as the current horizontal datum
 - NAVD88 vertical datum; awareness of ongoing transition to NAPGD2025/GEOID models
 - PLSS in California: township/range/section, BLM cadastral surveys
@@ -116,7 +116,7 @@ function contentToString(content: BaseMessage["content"]): string {
 
 // Maximum number of characters allowed in a single user message.
 // Prevents accidental (or deliberate) giant inputs from running up API costs.
-const MAX_MESSAGE_CHARS = 8_000;
+const MAX_MESSAGE_CHARS = 32_000;
 
 // Keep only the most recent N messages to prevent the request body from
 // growing unboundedly across a long conversation. Pairs are preserved by
@@ -127,8 +127,7 @@ const MAX_HISTORY_MESSAGES = 20;
 // client holds no session or conversation state.
 const client = getClient();
 const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
-// Cap at 8192 to bound costs even if VITE_MAX_TOKENS is misconfigured.
-const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192);
+const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 8192, 16384);
 
 // Wrap the system prompt as a cacheable content block so Anthropic can skip
 // re-processing its ~1,800 tokens on every turn after the first.
@@ -170,7 +169,7 @@ function buildGraph() {
             role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
             // Truncate oversized messages rather than forwarding them as-is.
             content: content.length > MAX_MESSAGE_CHARS
-              ? content.slice(0, MAX_MESSAGE_CHARS) + "\n\n[message truncated]"
+              ? content.slice(0, MAX_MESSAGE_CHARS)
               : content,
           };
         });
