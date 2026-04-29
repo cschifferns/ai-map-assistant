@@ -150,16 +150,22 @@ consultants, and clients navigating complex approval pathways.
   air protection), CalEnviroScreen screening tool
 
 ## Parcel data lookup
-You have access to a \`query_parcel_attributes\` tool that searches the current map's
-feature layers by APN (Assessor's Parcel Number). Use it when:
-- The user provides an APN and asks about permitting, zoning, or entitlements for that parcel
-- The conversation references specific APNs without sufficient attribute data to proceed
-- You need parcel-level details (acreage, zoning, overlay zones, land use designation)
-  to give accurate, site-specific permitting guidance
+You have two tools to retrieve parcel data from the current map. **Always call the
+appropriate tool before answering any permitting question about specific parcels** —
+do not rely on conversation context or your own knowledge for parcel attributes.
 
-Call the tool once per APN. Use the returned attributes to anchor your analysis. If the
-tool returns no data, note that and ask the user to confirm the relevant attributes manually
-or use the map's data exploration agent to pull them.
+1. **query_parcel_attributes** — looks up a parcel by its assessor ID across all
+   feature layers. Use when a parcel number (APN, AIN, PIN, folio, or similar) is
+   known — whether from the current message or from earlier in the conversation.
+   Call it once per parcel.
+
+2. **query_layer_features** — retrieves all features from a named map layer.
+   Use when the user references a layer by name (e.g., "Project Site Parcels") and
+   you need to discover which parcels it contains, or when no parcel number is known.
+
+Use the returned attributes (zoning, acreage, overlay zones, land use designation,
+jurisdiction) to anchor your permitting analysis. If both tools return no data, say so
+and ask the user to share the relevant attributes manually.
 
 ## How to respond
 - Identify the applicable regulatory framework first — federal, state, or local —
@@ -184,40 +190,67 @@ or use the map's data exploration agent to pull them.
   or boundary law questions, direct the user to the Land Surveying Expert agent.
 `.trim();
 
+// Regex matching common parcel identifier field names across jurisdictions:
+// APN / APN_8 (CA), AIN (LA County), PIN, PARCEL / PARCELNUM / PARCEL_ID,
+// FOLIO / FOLIO_NUM (FL), ASSESSOR / ASSESSOR_PARCEL_NUMBER, PNUM
+const PARCEL_ID_FIELD_RE = /^(apn|ain|pin|parcel|folio|assessor|pnum)/i;
+
 const PARCEL_TOOL: Anthropic.Tool = {
   name: "query_parcel_attributes",
   description:
-    "Query a parcel's attributes from the current map's feature layers by APN " +
-    "(Assessor's Parcel Number). Returns all available attributes such as zoning, " +
-    "acreage, land use designation, and overlay zones. Use when the user references " +
-    "an APN and you need parcel details to ground your permitting analysis.",
+    "Look up a parcel's attributes from the current map's feature layers using its " +
+    "assessor identifier (APN, AIN, PIN, folio number, or similar). Searches all " +
+    "feature layers for common parcel ID field names and returns all attributes " +
+    "such as zoning, acreage, land use designation, and overlay zones. " +
+    "Use when a parcel number is known from the conversation.",
   input_schema: {
     type: "object" as const,
     properties: {
-      apn: {
+      parcel_id: {
         type: "string",
         description:
-          "The Assessor's Parcel Number to look up. May include or omit dashes.",
+          "The parcel identifier to search for (APN, AIN, PIN, folio, etc.). " +
+          "Dashes and spaces are normalized automatically.",
       },
     },
-    required: ["apn"],
+    required: ["parcel_id"],
   },
 };
 
-async function queryParcelByAPN(
+const LAYER_TOOL: Anthropic.Tool = {
+  name: "query_layer_features",
+  description:
+    "Retrieve all features from a named map layer. Use when the user references a " +
+    "specific layer by name (e.g., 'Project Site Parcels') and you need to see its " +
+    "contents, or when no parcel identifier is yet known. Returns up to 20 features " +
+    "with all available attributes.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      layer_title: {
+        type: "string",
+        description:
+          "The title of the map layer to query. Case-insensitive, partial match accepted.",
+      },
+    },
+    required: ["layer_title"],
+  },
+};
+
+async function queryParcelAttributes(
   mapEl: HTMLElement & { view: any },
-  apn: string,
+  parcelId: string,
 ): Promise<string> {
   const view = mapEl?.view;
   if (!view) return "Map view is not ready yet.";
 
-  // Allow only digits and dashes to prevent injection into the WHERE clause
-  const sanitized = apn.replace(/[^\d-]/g, "");
-  if (!sanitized) return `Invalid APN format: "${apn}"`;
+  // Sanitize: allow digits, letters, dashes, spaces only
+  const sanitized = parcelId.replace(/[^\w\s-]/g, "").trim();
+  if (!sanitized) return `Invalid parcel ID format: "${parcelId}"`;
 
-  const digits = sanitized.replace(/-/g, "");
-  const variants = new Set([sanitized, digits]);
-  // Add common 10-digit dash format (e.g. "3178101900" → "317-810-1900")
+  const digits = sanitized.replace(/\D/g, "");
+  const variants = new Set([sanitized, digits, sanitized.replace(/\s+/g, "-")]);
+  // Add common 10-digit CA APN dash format (e.g. "3178101900" → "317-810-1900")
   if (digits.length === 10) {
     variants.add(`${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`);
   }
@@ -230,11 +263,11 @@ async function queryParcelByAPN(
     try {
       await layer.load();
       const fieldNames: string[] = (layer.fields ?? []).map((f: any) => f.name as string);
-      const apnFields = fieldNames.filter((f) => /^apn/i.test(f));
-      if (apnFields.length === 0) continue;
+      const idFields = fieldNames.filter((f) => PARCEL_ID_FIELD_RE.test(f));
+      if (idFields.length === 0) continue;
 
       const variantList = [...variants].map((v) => `'${v}'`).join(", ");
-      const where = apnFields.map((f) => `${f} IN (${variantList})`).join(" OR ");
+      const where = idFields.map((f) => `${f} IN (${variantList})`).join(" OR ");
 
       const query = layer.createQuery();
       query.where = where;
@@ -259,7 +292,55 @@ async function queryParcelByAPN(
     }
   }
 
-  return `No parcel found with APN "${sanitized}" in any map layer.`;
+  return `No parcel found with ID "${sanitized}" in any map layer.`;
+}
+
+async function queryLayerFeatures(
+  mapEl: HTMLElement & { view: any },
+  layerTitle: string,
+): Promise<string> {
+  const view = mapEl?.view;
+  if (!view) return "Map view is not ready yet.";
+
+  const featureLayers: any[] = view.map.allLayers
+    .filter((l: any) => l.type === "feature")
+    .toArray();
+
+  const needle = layerTitle.toLowerCase();
+  const matched = featureLayers.find((l: any) =>
+    (l.title as string ?? "").toLowerCase().includes(needle),
+  );
+
+  if (!matched) {
+    const available = featureLayers.map((l: any) => `"${l.title}"`).join(", ");
+    return `No layer found matching "${layerTitle}". Available feature layers: ${available || "none"}`;
+  }
+
+  try {
+    await matched.load();
+    const query = matched.createQuery();
+    query.where = "1=1";
+    query.outFields = ["*"];
+    query.returnGeometry = false;
+    query.num = 20;
+
+    const result = await matched.queryFeatures(query);
+    if (result.features.length === 0) {
+      return `Layer "${matched.title}" exists but contains no features.`;
+    }
+
+    return result.features
+      .map((f: any, i: number) => {
+        const attrs = Object.entries(f.attributes as Record<string, unknown>)
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("\n");
+        return `Feature ${i + 1} — Layer: ${matched.title}\n${attrs}`;
+      })
+      .join("\n\n---\n\n");
+  } catch (err) {
+    return `Error querying layer "${matched.title}": ${err instanceof Error ? err.message : String(err)}`;
+  }
 }
 
 const AgentWorkspace = Annotation.Root({
@@ -291,6 +372,8 @@ const maxTokens = Math.min(Number(import.meta.env.VITE_MAX_TOKENS) || 4096, 8192
 const CACHED_SYSTEM: Anthropic.TextBlockParam[] = [
   { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
 ];
+
+const TOOLS: Anthropic.Tool[] = [PARCEL_TOOL, LAYER_TOOL];
 
 function buildGraph(mapEl: HTMLElement & { view: any }) {
   const graph = new StateGraph(AgentWorkspace)
@@ -334,7 +417,7 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
             max_tokens: maxTokens,
             system: CACHED_SYSTEM,
             messages,
-            tools: [PARCEL_TOOL],
+            tools: TOOLS,
           });
 
           if (result.stop_reason !== "tool_use") {
@@ -357,8 +440,11 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
             if (block.type !== "tool_use") continue;
             let toolOutput: string;
             if (block.name === "query_parcel_attributes") {
-              const input = block.input as { apn?: string };
-              toolOutput = await queryParcelByAPN(mapEl, input.apn ?? "");
+              const input = block.input as { parcel_id?: string };
+              toolOutput = await queryParcelAttributes(mapEl, input.parcel_id ?? "");
+            } else if (block.name === "query_layer_features") {
+              const input = block.input as { layer_title?: string };
+              toolOutput = await queryLayerFeatures(mapEl, input.layer_title ?? "");
             } else {
               toolOutput = `Unknown tool: ${block.name}`;
             }
