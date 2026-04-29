@@ -136,11 +136,17 @@ export default {
     });
 
     // ── Return Anthropic's response with CORS headers added ───────────────
-    // On error, return a sanitized response — never forward Anthropic error
-    // bodies which may reveal key status, quota details, or account info.
+    // On error, surface the request-level error message (safe — it describes
+    // what was wrong with the request, not account or key details) while
+    // omitting anything account-specific.
     if (!upstream.ok) {
+      let detail: string | undefined;
+      try {
+        const errJson = await upstream.json() as { error?: { type?: string; message?: string } };
+        detail = errJson?.error?.message;
+      } catch { /* body was not JSON */ }
       return new Response(
-        JSON.stringify({ error: "API request failed", status: upstream.status }),
+        JSON.stringify({ error: "API request failed", status: upstream.status, ...(detail ? { detail } : {}) }),
         {
           status: upstream.status,
           headers: { ...corsHeaders(origin), "content-type": "application/json" },

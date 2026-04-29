@@ -204,10 +204,18 @@ const CACHED_SYSTEM: Anthropic.TextBlockParam[] = [
 function buildGraph() {
   const graph = new StateGraph(AgentWorkspace)
     .addNode("agent", async (state) => {
-      const apiMessages = state.messages
+      const window = state.messages
         .filter((m) => m.getType() !== "system")
-        .slice(-MAX_HISTORY_MESSAGES)
-        .map((m) => {
+        .slice(-MAX_HISTORY_MESSAGES);
+
+      const firstUserIdx = window.findIndex((m) => m.getType() !== "ai");
+      const trimmed = firstUserIdx > 0 ? window.slice(firstUserIdx) : window;
+
+      if (trimmed.length === 0) {
+        return { messages: [new AIMessage("No message received.")], outputMessage: "No message received." };
+      }
+
+      const apiMessages = trimmed.map((m) => {
           const content = contentToString(m.content);
           return {
             role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
