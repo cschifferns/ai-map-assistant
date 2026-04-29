@@ -150,10 +150,15 @@ function buildGraph() {
         .filter((m) => m.getType() !== "system")
         .slice(-MAX_HISTORY_MESSAGES);
 
-      // The Anthropic API requires the first message to be from the user.
-      // If the slice boundary lands on an AI turn, advance to the next user message.
+      // Anthropic requires messages to start AND end with a user turn.
+      // The orchestrator may inject AI messages before/after handing off
+      // to this agent, so strip both ends defensively.
       const firstUserIdx = window.findIndex((m) => m.getType() !== "ai");
-      const trimmed = firstUserIdx > 0 ? window.slice(firstUserIdx) : window;
+      let trimmed = firstUserIdx > 0 ? window.slice(firstUserIdx) : window;
+
+      let lastIdx = trimmed.length;
+      while (lastIdx > 0 && trimmed[lastIdx - 1].getType() === "ai") lastIdx--;
+      trimmed = trimmed.slice(0, lastIdx);
 
       if (trimmed.length === 0) {
         return { messages: [new AIMessage("No message received.")], outputMessage: "No message received." };

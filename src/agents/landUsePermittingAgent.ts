@@ -209,7 +209,11 @@ function buildGraph() {
         .slice(-MAX_HISTORY_MESSAGES);
 
       const firstUserIdx = window.findIndex((m) => m.getType() !== "ai");
-      const trimmed = firstUserIdx > 0 ? window.slice(firstUserIdx) : window;
+      let trimmed = firstUserIdx > 0 ? window.slice(firstUserIdx) : window;
+
+      let lastIdx = trimmed.length;
+      while (lastIdx > 0 && trimmed[lastIdx - 1].getType() === "ai") lastIdx--;
+      trimmed = trimmed.slice(0, lastIdx);
 
       if (trimmed.length === 0) {
         return { messages: [new AIMessage("No message received.")], outputMessage: "No message received." };
