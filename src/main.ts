@@ -8,10 +8,10 @@ const aiEl             = document.getElementById("assistant") as HTMLElement & {
 };
 const resetMapBtn      = document.getElementById("reset-map-btn")!;
 const clearChatBtn     = document.getElementById("clear-chat-btn")!;
-const featureTableEl   = document.getElementById("feature-table") as HTMLElement & { layer: any };
+const featureTableEl    = document.getElementById("feature-table") as HTMLElement & { layer: any };
 const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement & { collapsed: boolean };
-const featureTableHeader = document.getElementById("feature-table-header") as HTMLElement & { heading: string };
-const collapseTableBtn = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
+const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
+const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
@@ -82,13 +82,24 @@ mapEl.addEventListener(
       "Summarize the data visible in the current extent.",
     ];
 
-    // Connect the feature table to the first feature layer in the map.
-    const firstFeatureLayer = view.map.allLayers.find((l: any) => l.type === "feature");
-    if (firstFeatureLayer) {
-      featureTableEl.layer = firstFeatureLayer;
-      featureTableHeader.heading = `Feature Table — ${firstFeatureLayer.title}`;
+    // Populate the layer picker with all feature layers and connect the table.
+    const featureLayers: any[] = view.map.allLayers.filter((l: any) => l.type === "feature").toArray();
+    featureLayers.forEach((layer) => {
+      const option = document.createElement("calcite-option") as HTMLElement & { value: string };
+      option.value = layer.id;
+      option.textContent = layer.title;
+      layerPickerEl.appendChild(option);
+    });
+
+    if (featureLayers.length > 0) {
+      featureTableEl.layer = featureLayers[0];
       featureTablePanel.collapsed = false;
     }
+
+    layerPickerEl.addEventListener("calciteSelectChange", () => {
+      const selected = featureLayers.find((l) => l.id === layerPickerEl.value);
+      if (selected) featureTableEl.layer = selected;
+    });
   },
   { once: true },
 );

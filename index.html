@@ -47,6 +47,9 @@
         height: 100%;
         width: 100%;
       }
+      #layer-picker {
+        min-width: 200px;
+      }
     </style>
     <!-- ArcGIS Maps SDK for JavaScript 5.0 (CDN) — includes calcite, map components, and AI components -->
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
@@ -119,7 +122,8 @@
 
       <!-- ── Feature Table bottom panel ──────────────────────────────────── -->
       <calcite-shell-panel slot="panel-bottom" height-scale="m" collapsed id="feature-table-panel">
-        <calcite-panel heading="Feature Table" id="feature-table-header">
+        <calcite-panel heading="Feature Table">
+          <calcite-select slot="header-actions-start" id="layer-picker" label="Select layer"></calcite-select>
           <calcite-action
             slot="header-actions-end"
             icon="chevron-down"
