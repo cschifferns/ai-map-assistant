@@ -1,13 +1,17 @@
 import { createLandSurveyAgent } from "./agents/landSurveyAgent";
 import { createLandUsePermittingAgent } from "./agents/landUsePermittingAgent";
 
-const mapEl       = document.getElementById("main-map") as HTMLElement & { view: any };
-const aiEl        = document.getElementById("assistant") as HTMLElement & {
+const mapEl            = document.getElementById("main-map") as HTMLElement & { view: any };
+const aiEl             = document.getElementById("assistant") as HTMLElement & {
   clearChatHistory(): void;
   suggestedPrompts: string[];
 };
-const resetMapBtn  = document.getElementById("reset-map-btn")!;
-const clearChatBtn = document.getElementById("clear-chat-btn")!;
+const resetMapBtn      = document.getElementById("reset-map-btn")!;
+const clearChatBtn     = document.getElementById("clear-chat-btn")!;
+const featureTableEl   = document.getElementById("feature-table") as HTMLElement & { layer: any };
+const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement & { collapsed: boolean };
+const featureTableHeader = document.getElementById("feature-table-header") as HTMLElement & { heading: string };
+const collapseTableBtn = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
@@ -77,9 +81,25 @@ mapEl.addEventListener(
       "Zoom to the largest feature.",
       "Summarize the data visible in the current extent.",
     ];
+
+    // Connect the feature table to the first feature layer in the map.
+    const firstFeatureLayer = view.map.allLayers.find((l: any) => l.type === "feature");
+    if (firstFeatureLayer) {
+      featureTableEl.layer = firstFeatureLayer;
+      featureTableHeader.heading = `Feature Table — ${firstFeatureLayer.title}`;
+      featureTablePanel.collapsed = false;
+    }
   },
   { once: true },
 );
+
+// ── Feature table collapse toggle ─────────────────────────────────────────────
+collapseTableBtn.addEventListener("click", () => {
+  const isCollapsed = featureTablePanel.collapsed;
+  featureTablePanel.collapsed = !isCollapsed;
+  collapseTableBtn.icon = isCollapsed ? "chevron-down" : "chevron-up";
+  collapseTableBtn.text = isCollapsed ? "Collapse" : "Expand";
+});
 
 // ── Reset map button ──────────────────────────────────────────────────────────
 resetMapBtn.addEventListener("click", async () => {

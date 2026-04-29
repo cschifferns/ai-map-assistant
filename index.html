@@ -43,6 +43,10 @@
         height: 100%;
         width: 100%;
       }
+      arcgis-feature-table {
+        height: 100%;
+        width: 100%;
+      }
     </style>
     <!-- ArcGIS Maps SDK for JavaScript 5.0 (CDN) — includes calcite, map components, and AI components -->
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
@@ -110,6 +114,22 @@
 
 
           </arcgis-assistant>
+        </calcite-panel>
+      </calcite-shell-panel>
+
+      <!-- ── Feature Table bottom panel ──────────────────────────────────── -->
+      <calcite-shell-panel slot="panel-bottom" height-scale="m" collapsed id="feature-table-panel">
+        <calcite-panel heading="Feature Table" id="feature-table-header">
+          <calcite-action
+            slot="header-actions-end"
+            icon="chevron-down"
+            text="Collapse"
+            id="collapse-table-btn">
+          </calcite-action>
+          <arcgis-feature-table
+            id="feature-table"
+            reference-element="#main-map">
+          </arcgis-feature-table>
         </calcite-panel>
       </calcite-shell-panel>
 
