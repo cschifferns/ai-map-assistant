@@ -38,7 +38,8 @@ const ANTHROPIC_BASE = "https://api.anthropic.com";
 const ALLOWED_PATHS = new Set(["/v1/messages"]);
 
 // Max request body size (bytes) to prevent abuse / runaway costs.
-const MAX_BODY_BYTES = 64 * 1024; // 64 KB
+// 64 KB was too small — long conversations with large system prompts exceed it.
+const MAX_BODY_BYTES = 512 * 1024; // 512 KB
 
 function getAllowedOrigins(env: Env): string[] {
   return env.ALLOWED_ORIGINS.split(",")

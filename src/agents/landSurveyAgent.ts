@@ -118,6 +118,11 @@ function contentToString(content: BaseMessage["content"]): string {
 // Prevents accidental (or deliberate) giant inputs from running up API costs.
 const MAX_MESSAGE_CHARS = 8_000;
 
+// Keep only the most recent N messages to prevent the request body from
+// growing unboundedly across a long conversation. Pairs are preserved by
+// using an even number so the history doesn't end on an assistant turn.
+const MAX_HISTORY_MESSAGES = 20;
+
 // Module-level singletons — safe to reuse across calls since the Anthropic
 // client holds no session or conversation state.
 const client = getClient();
@@ -143,6 +148,7 @@ function buildGraph() {
     .addNode("agent", async (state) => {
       const apiMessages = state.messages
         .filter((m) => m.getType() !== "system")
+        .slice(-MAX_HISTORY_MESSAGES)
         .map((m) => {
           const content = contentToString(m.content);
           return {

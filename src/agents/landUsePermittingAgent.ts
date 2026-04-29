@@ -191,6 +191,7 @@ function contentToString(content: BaseMessage["content"]): string {
 }
 
 const MAX_MESSAGE_CHARS = 8_000;
+const MAX_HISTORY_MESSAGES = 20;
 
 const client = getClient();
 const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
@@ -205,6 +206,7 @@ function buildGraph() {
     .addNode("agent", async (state) => {
       const apiMessages = state.messages
         .filter((m) => m.getType() !== "system")
+        .slice(-MAX_HISTORY_MESSAGES)
         .map((m) => {
           const content = contentToString(m.content);
           return {
