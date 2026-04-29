@@ -36,8 +36,8 @@ mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
 // Wrapped in try-catch so a LangGraph/polyfill failure in the production build
 // doesn't prevent the map and built-in agents from loading.
 const customAgents: { factory: () => any; label: string }[] = [
-  { factory: createLandSurveyAgent,         label: "Land survey" },
-  { factory: createLandUsePermittingAgent,  label: "Land use & permitting" },
+  { factory: createLandSurveyAgent,                          label: "Land survey" },
+  { factory: () => createLandUsePermittingAgent(mapEl),      label: "Land use & permitting" },
 ];
 
 for (const { factory, label } of customAgents) {

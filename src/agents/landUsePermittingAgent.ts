@@ -149,6 +149,18 @@ consultants, and clients navigating complex approval pathways.
 - Environmental Justice: SB 1000 (EJ element in general plan), AB 617 (community
   air protection), CalEnviroScreen screening tool
 
+## Parcel data lookup
+You have access to a \`query_parcel_attributes\` tool that searches the current map's
+feature layers by APN (Assessor's Parcel Number). Use it when:
+- The user provides an APN and asks about permitting, zoning, or entitlements for that parcel
+- The conversation references specific APNs without sufficient attribute data to proceed
+- You need parcel-level details (acreage, zoning, overlay zones, land use designation)
+  to give accurate, site-specific permitting guidance
+
+Call the tool once per APN. Use the returned attributes to anchor your analysis. If the
+tool returns no data, note that and ask the user to confirm the relevant attributes manually
+or use the map's data exploration agent to pull them.
+
 ## How to respond
 - Identify the applicable regulatory framework first — federal, state, or local —
   and clarify jurisdiction before diving into process details
@@ -165,12 +177,90 @@ consultants, and clients navigating complex approval pathways.
 - If you are uncertain, say so clearly rather than guessing
 
 ## What you are NOT
-- You are not a general-purpose map assistant. For questions about map layers, feature
-  data, or GIS analysis unrelated to planning and permitting, direct the user to ask
-  the map assistant instead.
+- For map navigation tasks (zooming, layer visibility changes, feature selection) that
+  are unrelated to planning or permitting analysis, direct the user to ask the map
+  assistant instead.
 - You are not a land surveying expert. For surveying regulations, coordinate systems,
   or boundary law questions, direct the user to the Land Surveying Expert agent.
 `.trim();
+
+const PARCEL_TOOL: Anthropic.Tool = {
+  name: "query_parcel_attributes",
+  description:
+    "Query a parcel's attributes from the current map's feature layers by APN " +
+    "(Assessor's Parcel Number). Returns all available attributes such as zoning, " +
+    "acreage, land use designation, and overlay zones. Use when the user references " +
+    "an APN and you need parcel details to ground your permitting analysis.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      apn: {
+        type: "string",
+        description:
+          "The Assessor's Parcel Number to look up. May include or omit dashes.",
+      },
+    },
+    required: ["apn"],
+  },
+};
+
+async function queryParcelByAPN(
+  mapEl: HTMLElement & { view: any },
+  apn: string,
+): Promise<string> {
+  const view = mapEl?.view;
+  if (!view) return "Map view is not ready yet.";
+
+  // Allow only digits and dashes to prevent injection into the WHERE clause
+  const sanitized = apn.replace(/[^\d-]/g, "");
+  if (!sanitized) return `Invalid APN format: "${apn}"`;
+
+  const digits = sanitized.replace(/-/g, "");
+  const variants = new Set([sanitized, digits]);
+  // Add common 10-digit dash format (e.g. "3178101900" → "317-810-1900")
+  if (digits.length === 10) {
+    variants.add(`${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`);
+  }
+
+  const featureLayers: any[] = view.map.allLayers
+    .filter((l: any) => l.type === "feature")
+    .toArray();
+
+  for (const layer of featureLayers) {
+    try {
+      await layer.load();
+      const fieldNames: string[] = (layer.fields ?? []).map((f: any) => f.name as string);
+      const apnFields = fieldNames.filter((f) => /^apn/i.test(f));
+      if (apnFields.length === 0) continue;
+
+      const variantList = [...variants].map((v) => `'${v}'`).join(", ");
+      const where = apnFields.map((f) => `${f} IN (${variantList})`).join(" OR ");
+
+      const query = layer.createQuery();
+      query.where = where;
+      query.outFields = ["*"];
+      query.returnGeometry = false;
+      query.num = 5;
+
+      const result = await layer.queryFeatures(query);
+      if (result.features.length === 0) continue;
+
+      return result.features
+        .map((f: any) => {
+          const attrs = Object.entries(f.attributes as Record<string, unknown>)
+            .filter(([, v]) => v !== null && v !== undefined && v !== "")
+            .map(([k, v]) => `${k}: ${v}`)
+            .join("\n");
+          return `Layer: ${layer.title}\n${attrs}`;
+        })
+        .join("\n\n---\n\n");
+    } catch {
+      continue;
+    }
+  }
+
+  return `No parcel found with APN "${sanitized}" in any map layer.`;
+}
 
 const AgentWorkspace = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -192,6 +282,7 @@ function contentToString(content: BaseMessage["content"]): string {
 
 const MAX_MESSAGE_CHARS = 8_000;
 const MAX_HISTORY_MESSAGES = 20;
+const MAX_TOOL_ROUNDS = 5;
 
 const client = getClient();
 const model = import.meta.env.VITE_MODEL ?? "claude-sonnet-4-6";
@@ -201,7 +292,7 @@ const CACHED_SYSTEM: Anthropic.TextBlockParam[] = [
   { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
 ];
 
-function buildGraph() {
+function buildGraph(mapEl: HTMLElement & { view: any }) {
   const graph = new StateGraph(AgentWorkspace)
     .addNode("agent", async (state) => {
       const window = state.messages
@@ -216,34 +307,79 @@ function buildGraph() {
       trimmed = trimmed.slice(0, lastIdx);
 
       if (trimmed.length === 0) {
-        return { messages: [new AIMessage("No message received.")], outputMessage: "No message received." };
+        return {
+          messages: [new AIMessage("No message received.")],
+          outputMessage: "No message received.",
+        };
       }
 
-      const apiMessages = trimmed.map((m) => {
-          const content = contentToString(m.content);
-          return {
-            role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
-            content: content.length > MAX_MESSAGE_CHARS
+      const baseMessages: Anthropic.MessageParam[] = trimmed.map((m) => {
+        const content = contentToString(m.content);
+        return {
+          role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
+          content:
+            content.length > MAX_MESSAGE_CHARS
               ? content.slice(0, MAX_MESSAGE_CHARS) + "\n\n[message truncated]"
               : content,
-          };
-        });
+        };
+      });
 
-      let text: string;
+      let text = "";
       try {
-        const result = await client.messages.create({
-          model,
-          max_tokens: maxTokens,
-          system: CACHED_SYSTEM,
-          messages: apiMessages,
-        });
+        const messages: Anthropic.MessageParam[] = [...baseMessages];
 
-        text = result.content
-          .filter((b) => b.type === "text")
-          .map((b) => (b.type === "text" ? b.text : ""))
-          .join("");
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          const result = await client.messages.create({
+            model,
+            max_tokens: maxTokens,
+            system: CACHED_SYSTEM,
+            messages,
+            tools: [PARCEL_TOOL],
+          });
+
+          if (result.stop_reason !== "tool_use") {
+            text = result.content
+              .filter((b): b is Anthropic.TextBlock => b.type === "text")
+              .map((b) => b.text)
+              .join("");
+            break;
+          }
+
+          // Add assistant turn containing the tool use block(s)
+          messages.push({
+            role: "assistant",
+            content: result.content as Anthropic.ContentBlockParam[],
+          });
+
+          // Execute each tool call and collect results
+          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          for (const block of result.content) {
+            if (block.type !== "tool_use") continue;
+            let toolOutput: string;
+            if (block.name === "query_parcel_attributes") {
+              const input = block.input as { apn?: string };
+              toolOutput = await queryParcelByAPN(mapEl, input.apn ?? "");
+            } else {
+              toolOutput = `Unknown tool: ${block.name}`;
+            }
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: toolOutput,
+            });
+          }
+
+          messages.push({ role: "user", content: toolResults });
+        }
+
+        if (!text) {
+          text = "I was unable to complete your request within the allowed steps. Please try rephrasing.";
+        }
       } catch (err) {
-        console.error("[landUsePermittingAgent] API error:", err instanceof Error ? err.message : String(err));
+        console.error(
+          "[landUsePermittingAgent] API error:",
+          err instanceof Error ? err.message : String(err),
+        );
         text = "I encountered an error processing your request. Please try again.";
       }
 
@@ -258,7 +394,9 @@ function buildGraph() {
   return graph;
 }
 
-export function createLandUsePermittingAgent(): AgentRegistration {
+export function createLandUsePermittingAgent(
+  mapEl: HTMLElement & { view: any },
+): AgentRegistration {
   return {
     id: "land-use-permitting-agent",
     name: "Land Use & Permitting Expert",
@@ -285,6 +423,6 @@ export function createLandUsePermittingAgent(): AgentRegistration {
     `.trim(),
 
     workspace: AgentWorkspace,
-    createGraph: (_workspace: typeof AgentWorkspace.State) => buildGraph(),
+    createGraph: (_workspace: typeof AgentWorkspace.State) => buildGraph(mapEl),
   };
 }
