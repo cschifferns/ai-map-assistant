@@ -174,7 +174,13 @@ mapEl.addEventListener(
           (f: any) => f.layer === tableLayer || f.sourceLayer === tableLayer,
         );
         if (tableFeatures.length > 0) {
-          try { tableSelMgr()?.selectRows(tableFeatures, "new"); } catch { /* not ready */ }
+          const sm = tableSelMgr();
+          console.log("[featureTable] selectionManager:", sm);
+          console.log("[featureTable] selectionManager keys:", sm ? Object.keys(sm) : "n/a");
+          console.log("[featureTable] element keys (own):", Object.getOwnPropertyNames(featureTableEl));
+          console.log("[featureTable] viewModel:", (featureTableEl as any).viewModel);
+          console.log("[featureTable] widget:", (featureTableEl as any).widget);
+          try { tableSelMgr()?.selectRows(tableFeatures, "new"); } catch (e) { console.warn("[featureTable] selectRows error:", e); }
         }
       }
     });
