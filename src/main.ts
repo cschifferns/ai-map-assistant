@@ -96,8 +96,13 @@ mapEl.addEventListener(
       "Summarize the data visible in the current extent.",
     ];
 
+    // Only these layers appear in the feature table picker.
+    const TABLE_LAYERS = new Set(["Project Site Parcels", "Easements", "Field Photos"]);
+
     // Populate the layer picker with all feature layers and connect the table.
-    const featureLayers: any[] = view.map.allLayers.filter((l: any) => l.type === "feature").toArray();
+    const featureLayers: any[] = view.map.allLayers
+      .filter((l: any) => l.type === "feature" && TABLE_LAYERS.has(l.title))
+      .toArray();
     featureLayers.forEach((layer) => {
       const option = document.createElement("calcite-option") as HTMLElement & { value: string };
       option.value = layer.id;
