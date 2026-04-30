@@ -91,10 +91,19 @@ export default {
     // ── Proxy token check (if configured) ────────────────────────────────
     // Validates a shared secret sent in X-Proxy-Token. This doesn't prevent
     // token extraction from the JS bundle, but it blocks untargeted abuse.
-    if (env.PROXY_TOKEN) {
+    // Localhost origins skip the token check — the origin itself is sufficient
+    // proof that the request comes from a local dev session.
+    const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(origin);
+    if (env.PROXY_TOKEN && !isLocalhost) {
       const clientToken = request.headers.get("X-Proxy-Token");
       if (clientToken !== env.PROXY_TOKEN) {
-        return new Response("Forbidden", { status: 403 });
+        return new Response(
+          JSON.stringify({ error: "Forbidden: invalid proxy token" }),
+          {
+            status: 403,
+            headers: { ...corsHeaders(origin), "content-type": "application/json" },
+          },
+        );
       }
     }
 
