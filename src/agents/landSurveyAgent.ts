@@ -15,6 +15,7 @@ import { Annotation, StateGraph, END } from "@langchain/langgraph";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import type { AgentRegistration } from "@arcgis/ai-components/utils";
 import { getClient } from "../llm";
+import { selectionManager } from "../selection/SelectionManager";
 
 // ---------------------------------------------------------------
 // System prompt — this is where the domain expertise lives.
@@ -82,6 +83,13 @@ surveyors, GIS professionals, and project teams with technical questions.
 - When discussing coordinate systems or datums, be explicit about which
   realization and epoch is being referenced — this matters in practice
 - If you are uncertain, say so clearly rather than guessing
+
+## Map selection context
+When the user's message begins with a [Selected features...] block, treat those feature
+attributes as ground-truth context for the current question. The features may be from
+any layer type — parcels, easements, infrastructure, field observations, CAD data, etc.
+Use the layer name, geometry type, and attribute keys to infer what kind of data you are
+working with and apply your surveying domain knowledge accordingly.
 
 ## What you are NOT
 - You are not a general-purpose map assistant. For questions about map layers,
@@ -160,19 +168,37 @@ function buildGraph() {
       trimmed = trimmed.slice(0, lastIdx);
 
       if (trimmed.length === 0) {
+        console.warn(
+          "[landSurveyAgent] Empty message window after trimming. Raw message types:",
+          state.messages.map((m) => m.getType()),
+        );
         return { messages: [new AIMessage("No message received.")], outputMessage: "No message received." };
       }
 
-      const apiMessages = trimmed.map((m) => {
-          const content = contentToString(m.content);
-          return {
-            role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
-            // Truncate oversized messages rather than forwarding them as-is.
-            content: content.length > MAX_MESSAGE_CHARS
-              ? content.slice(0, MAX_MESSAGE_CHARS)
-              : content,
-          };
-        });
+      const apiMessages: Anthropic.MessageParam[] = trimmed.map((m) => {
+        const content = contentToString(m.content);
+        return {
+          role: (m.getType() === "ai" ? "assistant" : "user") as "user" | "assistant",
+          content: content.length > MAX_MESSAGE_CHARS
+            ? content.slice(0, MAX_MESSAGE_CHARS)
+            : content,
+        };
+      });
+
+      // Prepend map selection context to the last user message when features
+      // are selected on the map, so Claude can use them without a tool call.
+      const selCtx = selectionManager.getContext();
+      if (selCtx) {
+        for (let i = apiMessages.length - 1; i >= 0; i--) {
+          if (apiMessages[i].role === "user" && typeof apiMessages[i].content === "string") {
+            apiMessages[i] = {
+              ...apiMessages[i],
+              content: `${selCtx}\n\n${apiMessages[i].content}`,
+            };
+            break;
+          }
+        }
+      }
 
       let text: string;
       try {

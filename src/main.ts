@@ -1,5 +1,7 @@
 import { createLandSurveyAgent } from "./agents/landSurveyAgent";
 import { createLandUsePermittingAgent } from "./agents/landUsePermittingAgent";
+import { selectionManager } from "./selection/SelectionManager";
+import { initSelectionInjection } from "./selection/useSelectionInjection";
 
 const mapEl            = document.getElementById("main-map") as HTMLElement & { view: any };
 const aiEl             = document.getElementById("assistant") as HTMLElement & {
@@ -12,10 +14,14 @@ const featureTableEl    = document.getElementById("feature-table") as HTMLElemen
 const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement;
 const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
 const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
-const selectRectBtn    = document.getElementById("select-rect-btn")!;
-const clearSelBtn      = document.getElementById("clear-sel-btn")!;
+const selectRectBtn        = document.getElementById("select-rect-btn")!;
+const clearSelBtn          = document.getElementById("clear-sel-btn")!;
+const selectionBannerEl    = document.getElementById("selection-banner")!;
+const selectionBannerText  = document.getElementById("selection-banner-text")!;
+const selectionBannerClear = document.getElementById("selection-banner-clear")!;
 let tableExpanded = false;
 let clearSelection: () => void = () => {};
+let sketchVM: any = null;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Register OAuth before setting item-id so IdentityManager routes through
@@ -111,16 +117,17 @@ mapEl.addEventListener(
     // ── Rectangle selection ───────────────────────────────────────────────
     const sketchLayer = new GraphicsLayer({ listMode: "hide" });
     view.map.add(sketchLayer);
-    const sketchVM = new SketchViewModel({ layer: sketchLayer, view });
+    sketchVM = new SketchViewModel({ layer: sketchLayer, view });
 
     const highlights: any[] = [];
 
     clearSelection = () => {
-      if (sketchVM.state === "active") sketchVM.cancel();
+      if (sketchVM?.state === "active") sketchVM.cancel();
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
       sketchLayer.removeAll();
       clearSelBtn.setAttribute("disabled", "");
+      selectionManager.clearSelection();
     };
 
     sketchVM.on("create", async (event: any) => {
@@ -131,7 +138,7 @@ mapEl.addEventListener(
       highlights.length = 0;
       clearSelBtn.setAttribute("disabled", "");
 
-      let didSelect = false;
+      const allFeatures: any[] = [];
       const layers: any[] = view.map.allLayers
         .filter((l: any) => l.type === "feature" && l.visible)
         .toArray();
@@ -141,23 +148,38 @@ mapEl.addEventListener(
           const q = layer.createQuery();
           q.geometry = geometry;
           q.spatialRelationship = "intersects";
-          const oids = await layer.queryObjectIds(q);
-          if (oids.length === 0) continue;
+          q.outFields = ["*"];
+          q.returnGeometry = false;
+          const result = await layer.queryFeatures(q);
+          if (result.features.length === 0) continue;
           const lv = await view.whenLayerView(layer);
-          highlights.push(lv.highlight(oids));
-          didSelect = true;
+          highlights.push(lv.highlight(result.features));
+          allFeatures.push(...result.features);
         } catch { /* layer doesn't support spatial queries */ }
       }
 
-      if (didSelect) clearSelBtn.removeAttribute("disabled");
+      if (allFeatures.length > 0) {
+        clearSelBtn.removeAttribute("disabled");
+        selectionManager.setSelection(allFeatures);
+      }
     });
 
     selectRectBtn.addEventListener("click", () => {
-      if (sketchVM.state === "active") sketchVM.cancel();
+      if (sketchVM?.state === "active") sketchVM.cancel();
       sketchVM.create("rectangle");
     });
 
     clearSelBtn.addEventListener("click", () => clearSelection());
+
+    // ── Selection injection ───────────────────────────────────────────────
+    initSelectionInjection({
+      view,
+      featureTableEl,
+      bannerEl: selectionBannerEl,
+      bannerTextEl: selectionBannerText,
+      clearBannerBtn: selectionBannerClear,
+      isSketchActive: () => sketchVM?.state === "active",
+    });
   },
   { once: true },
 );
@@ -174,7 +196,7 @@ collapseTableBtn.addEventListener("click", () => {
 resetMapBtn.addEventListener("click", async () => {
   const view = mapEl.view;
   if (!view) return;
-  clearSelection();
+  clearSelection(); // also calls selectionManager.clearSelection()
 
   const lvPromises: Promise<void>[] = [];
 

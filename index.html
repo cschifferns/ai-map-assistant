@@ -67,6 +67,23 @@
         border-bottom: 1px solid var(--calcite-color-border-1);
         flex-shrink: 0;
       }
+      #selection-banner {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--calcite-color-foreground-2);
+        border-bottom: 1px solid var(--calcite-color-border-1);
+        font-size: 0.8125rem;
+        color: var(--calcite-color-text-2);
+        flex-shrink: 0;
+      }
+      #selection-banner-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       #feature-table-toolbar span {
         font-size: 0.875rem;
         font-weight: 600;
@@ -157,6 +174,19 @@
           <calcite-tooltip reference-element="clear-chat-btn">
             Clear the conversation and start a new session with the assistant
           </calcite-tooltip>
+          <!-- Selection status banner — hidden until features are selected -->
+          <div id="selection-banner">
+            <span id="selection-banner-text"></span>
+            <calcite-button
+              id="selection-banner-clear"
+              scale="s"
+              appearance="transparent"
+              kind="neutral"
+              icon-start="x">
+              Clear
+            </calcite-button>
+          </div>
+
           <arcgis-assistant
             id="assistant"
             log-enabled
