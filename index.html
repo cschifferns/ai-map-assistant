@@ -154,7 +154,15 @@
       </div>
 
       <!-- ── AI Assistant side panel ────────────────────────────────────── -->
-      <calcite-shell-panel slot="panel-end" width="l">
+      <calcite-shell-panel slot="panel-end" width="l" id="assistant-shell-panel" collapsed>
+        <calcite-action-bar slot="action-bar" expand-disabled>
+          <calcite-action
+            id="assistant-toggle"
+            text="AI Map Assistant"
+            icon="speech-bubbles">
+          </calcite-action>
+        </calcite-action-bar>
+
         <calcite-panel heading="AI Map Assistant">
           <calcite-action
             slot="header-actions-end"

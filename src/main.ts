@@ -14,6 +14,8 @@ const featureTableEl    = document.getElementById("feature-table") as HTMLElemen
 const featureTablePanel = document.getElementById("feature-table-panel") as HTMLElement;
 const layerPickerEl     = document.getElementById("layer-picker") as HTMLElement & { value: string };
 const collapseTableBtn  = document.getElementById("collapse-table-btn") as HTMLElement & { icon: string; text: string };
+const assistantToggle      = document.getElementById("assistant-toggle") as HTMLElement & { active: boolean };
+const assistantShellPanel  = document.getElementById("assistant-shell-panel") as HTMLElement & { collapsed: boolean };
 const selectRectBtn        = document.getElementById("select-rect-btn")!;
 const clearSelBtn          = document.getElementById("clear-sel-btn")!;
 const selectionBannerEl    = document.getElementById("selection-banner")!;
@@ -224,6 +226,12 @@ mapEl.addEventListener(
   },
   { once: true },
 );
+
+// ── Assistant panel toggle ────────────────────────────────────────────────────
+assistantToggle.addEventListener("click", () => {
+  assistantShellPanel.collapsed = !assistantShellPanel.collapsed;
+  assistantToggle.active = !assistantShellPanel.collapsed;
+});
 
 // ── Feature table collapse toggle ─────────────────────────────────────────────
 collapseTableBtn.addEventListener("click", () => {
