@@ -16,6 +16,7 @@ import { Annotation, StateGraph, END } from "@langchain/langgraph";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import type { AgentRegistration } from "@arcgis/ai-components/utils";
 import { getClient } from "../llm";
+import { selectionManager } from "../selection/SelectionManager";
 
 const SYSTEM_PROMPT = `
 You are an expert land use planning and environmental permitting assistant with
@@ -166,6 +167,15 @@ do not rely on conversation context or your own knowledge for parcel attributes.
 Use the returned attributes (zoning, acreage, overlay zones, land use designation,
 jurisdiction) to anchor your permitting analysis. If both tools return no data, say so
 and ask the user to share the relevant attributes manually.
+
+## Map selection context
+When the user's message begins with a [Selected features...] block, treat those feature
+attributes as ground-truth context for the current question. The features may be from
+any layer type — parcels, easements, infrastructure, field observations, CAD data, etc.
+Use the layer name, geometry type, and attribute keys to infer what kind of data you are
+working with and apply your domain knowledge accordingly. If the selected features
+contain APNs or parcel identifiers, you do not need to call query_parcel_attributes —
+the data is already present in the selection block.
 
 ## How to respond
 
@@ -405,6 +415,10 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
       trimmed = trimmed.slice(0, lastIdx);
 
       if (trimmed.length === 0) {
+        console.warn(
+          "[landUsePermittingAgent] Empty message window after trimming. Raw message types:",
+          state.messages.map((m) => m.getType()),
+        );
         return {
           messages: [new AIMessage("No message received.")],
           outputMessage: "No message received.",
@@ -421,6 +435,27 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
               : content,
         };
       });
+
+      // Prepend map selection context to the last user message when features
+      // are selected on the map, so Claude can use them without a tool call.
+      const selCtx = selectionManager.getContext();
+      console.log(
+        `[landUsePermittingAgent] selection: ${selectionManager.getCount()} features,`,
+        `context length: ${selCtx.length} chars,`,
+        `window: ${trimmed.length} messages`,
+      );
+      if (selCtx) {
+        for (let i = baseMessages.length - 1; i >= 0; i--) {
+          if (baseMessages[i].role === "user" && typeof baseMessages[i].content === "string") {
+            baseMessages[i] = {
+              ...baseMessages[i],
+              content: `${selCtx}\n\n${baseMessages[i].content}`,
+            };
+            console.log("[landUsePermittingAgent] injected selection context into message", i);
+            break;
+          }
+        }
+      }
 
       let text = "";
       try {
@@ -519,6 +554,12 @@ export function createLandUsePermittingAgent(
         variances, development agreements, or subdivision maps
       - Housing law: Builder's Remedy, SB 9, ADU regulations, density bonus, or RHNA
       - Floodplain management or FEMA NFIP permitting
+      - BESS (Battery Energy Storage System), solar, wind, and utility-scale energy
+        facility permitting, siting, entitlements, and regulatory approval pathways
+      - Fire marshal approvals, NFPA 855 compliance, and hazardous materials permits
+        for energy storage or industrial facilities
+      - Parcel-specific permitting questions when APNs or parcel attributes are provided
+        — this agent can use those directly without routing through data exploration first
       - Any land use, planning, or environmental permitting question related to
         California or Hawaii projects
     `.trim(),
