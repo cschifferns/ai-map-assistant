@@ -174,12 +174,13 @@ mapEl.addEventListener(
           (f: any) => f.layer === tableLayer || f.sourceLayer === tableLayer,
         );
         if (tableFeatures.length > 0) {
-          const sm = tableSelMgr();
-          console.log("[featureTable] selectionManager:", sm);
-          console.log("[featureTable] selectionManager keys:", sm ? Object.keys(sm) : "n/a");
-          console.log("[featureTable] element keys (own):", Object.getOwnPropertyNames(featureTableEl));
-          console.log("[featureTable] viewModel:", (featureTableEl as any).viewModel);
-          console.log("[featureTable] widget:", (featureTableEl as any).widget);
+          const ftEl = featureTableEl as any;
+          console.log("[featureTable] own keys:", Object.getOwnPropertyNames(ftEl));
+          console.log("[featureTable] proto keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(ftEl)));
+          console.log("[featureTable] .featureTable:", ftEl.featureTable);
+          console.log("[featureTable] .table:", ftEl.table);
+          console.log("[featureTable] typeof selectRows:", typeof ftEl.selectRows);
+          console.log("[featureTable] typeof clearSelection:", typeof ftEl.clearSelection);
           try { tableSelMgr()?.selectRows(tableFeatures, "new"); } catch (e) { console.warn("[featureTable] selectRows error:", e); }
         }
       }
