@@ -120,21 +120,28 @@
           <arcgis-expand slot="top-right">
             <arcgis-basemap-gallery></arcgis-basemap-gallery>
           </arcgis-expand>
-          <!-- Selection tools — bottom-left of the map -->
-          <div slot="bottom-left" style="display:flex;gap:4px;margin:0 0 8px 8px;">
+          <!-- Selection tools — bottom-left of the map, styled to match native widgets -->
+          <div slot="bottom-left" style="
+              display:flex;
+              flex-direction:column;
+              margin:0 0 8px 8px;
+              background:var(--calcite-color-foreground-1,#fff);
+              border-radius:4px;
+              box-shadow:0 1px 2px rgba(0,0,0,0.3);
+              overflow:hidden;">
             <calcite-action
               id="select-rect-btn"
               icon="extent"
               text="Select by rectangle"
               title="Draw a rectangle to select features"
-              scale="s">
+              scale="m">
             </calcite-action>
             <calcite-action
               id="clear-sel-btn"
               icon="erase"
               text="Clear selection"
               title="Clear selected features"
-              scale="s"
+              scale="m"
               disabled>
             </calcite-action>
           </div>
