@@ -121,8 +121,8 @@ mapEl.addEventListener(
 
     const highlights: any[] = [];
 
-    const featureLayers2 = (): any[] =>
-      view.map.allLayers.filter((l: any) => l.type === "feature").toArray();
+    // Shorthand for the feature table's selectionManager (4.x/5.x API).
+    const tableSelMgr = () => (featureTableEl as any).selectionManager as any;
 
     clearSelection = () => {
       if (sketchVM?.state === "active") sketchVM.cancel();
@@ -131,8 +131,7 @@ mapEl.addEventListener(
       sketchLayer.removeAll();
       clearSelBtn.setAttribute("disabled", "");
       selectionManager.clearSelection();
-      // Clear the layer selection model so the feature table deselects rows.
-      featureLayers2().forEach((l: any) => { try { l.clearSelection(); } catch { /* not supported */ } });
+      try { tableSelMgr()?.clear(); } catch { /* not ready */ }
     };
 
     sketchVM.on("create", async (event: any) => {
@@ -142,8 +141,7 @@ mapEl.addEventListener(
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
       clearSelBtn.setAttribute("disabled", "");
-      // Clear existing layer selections before applying new ones.
-      featureLayers2().forEach((l: any) => { try { l.clearSelection(); } catch { /* not supported */ } });
+      try { tableSelMgr()?.clear(); } catch { /* not ready */ }
 
       const allFeatures: any[] = [];
       const visibleLayers: any[] = view.map.allLayers
@@ -162,14 +160,22 @@ mapEl.addEventListener(
           const lv = await view.whenLayerView(layer);
           highlights.push(lv.highlight(result.features));
           allFeatures.push(...result.features);
-          // Update the layer's selection model so the feature table reflects the pick.
-          try { await layer.selectFeatures(q, "new"); } catch { /* not supported */ }
         } catch { /* layer doesn't support spatial queries */ }
       }
 
       if (allFeatures.length > 0) {
         clearSelBtn.removeAttribute("disabled");
         selectionManager.setSelection(allFeatures);
+
+        // Sync to the feature table: select rows that belong to the layer
+        // currently displayed in the table (table shows one layer at a time).
+        const tableLayer = featureTableEl.layer;
+        const tableFeatures = allFeatures.filter(
+          (f: any) => f.layer === tableLayer || f.sourceLayer === tableLayer,
+        );
+        if (tableFeatures.length > 0) {
+          try { tableSelMgr()?.selectRows(tableFeatures, "new"); } catch { /* not ready */ }
+        }
       }
     });
 
