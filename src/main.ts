@@ -105,6 +105,9 @@ mapEl.addEventListener(
 
     if (featureLayers.length > 0) {
       featureTableEl.layer = featureLayers[0];
+      // Set the view so the table's selectionManager initialises.
+      // reference-element wires up display but doesn't populate .view on the widget.
+      (featureTableEl as any).view = view;
       featureTablePanel.style.display = "flex";
       tableExpanded = true;
     }
@@ -121,8 +124,40 @@ mapEl.addEventListener(
 
     const highlights: any[] = [];
 
-    // Shorthand for the feature table's selectionManager (4.x/5.x API).
-    const tableSelMgr = () => (featureTableEl as any).selectionManager as any;
+    const ftEl = featureTableEl as any;
+
+    // Sync the feature table selection to match the rectangle draw.
+    // selectionManager is initialised once .view is set (done above).
+    // rowHighlightIds is used as a fallback — it visually highlights rows
+    // without needing a fully initialised selectionManager.
+    const syncTableSelection = (features: any[]) => {
+      const tableLayer = featureTableEl.layer;
+      const tableFeatures = features.filter(
+        (f: any) => f.layer === tableLayer || f.sourceLayer === tableLayer,
+      );
+      if (tableFeatures.length === 0) return;
+
+      const oidField: string = tableLayer?.objectIdField ?? "OBJECTID";
+      const oids: number[] = tableFeatures
+        .map((f: any) => f.attributes[oidField])
+        .filter((id: any) => id != null);
+
+      const sm = ftEl.selectionManager;
+      if (sm) {
+        try { sm.clear(); sm.selectRows(tableFeatures, "new"); return; } catch { /* fall through */ }
+      }
+      // Fallback: rowHighlightIds visually marks rows without needing selectionManager.
+      try {
+        ftEl.rowHighlightIds?.removeAll();
+        ftEl.rowHighlightIds?.addMany(oids);
+      } catch { /* not supported */ }
+    };
+
+    const clearTableSelection = () => {
+      const sm = ftEl.selectionManager;
+      if (sm) { try { sm.clear(); return; } catch { /* fall through */ } }
+      try { ftEl.rowHighlightIds?.removeAll(); } catch { /* not supported */ }
+    };
 
     clearSelection = () => {
       if (sketchVM?.state === "active") sketchVM.cancel();
@@ -131,7 +166,7 @@ mapEl.addEventListener(
       sketchLayer.removeAll();
       clearSelBtn.setAttribute("disabled", "");
       selectionManager.clearSelection();
-      try { tableSelMgr()?.clear(); } catch { /* not ready */ }
+      clearTableSelection();
     };
 
     sketchVM.on("create", async (event: any) => {
@@ -141,7 +176,7 @@ mapEl.addEventListener(
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
       clearSelBtn.setAttribute("disabled", "");
-      try { tableSelMgr()?.clear(); } catch { /* not ready */ }
+      clearTableSelection();
 
       const allFeatures: any[] = [];
       const visibleLayers: any[] = view.map.allLayers
@@ -166,23 +201,7 @@ mapEl.addEventListener(
       if (allFeatures.length > 0) {
         clearSelBtn.removeAttribute("disabled");
         selectionManager.setSelection(allFeatures);
-
-        // Sync to the feature table: select rows that belong to the layer
-        // currently displayed in the table (table shows one layer at a time).
-        const tableLayer = featureTableEl.layer;
-        const tableFeatures = allFeatures.filter(
-          (f: any) => f.layer === tableLayer || f.sourceLayer === tableLayer,
-        );
-        if (tableFeatures.length > 0) {
-          const ftEl = featureTableEl as any;
-          console.log("[featureTable] own keys:", Object.getOwnPropertyNames(ftEl));
-          console.log("[featureTable] proto keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(ftEl)));
-          console.log("[featureTable] .featureTable:", ftEl.featureTable);
-          console.log("[featureTable] .table:", ftEl.table);
-          console.log("[featureTable] typeof selectRows:", typeof ftEl.selectRows);
-          console.log("[featureTable] typeof clearSelection:", typeof ftEl.clearSelection);
-          try { tableSelMgr()?.selectRows(tableFeatures, "new"); } catch (e) { console.warn("[featureTable] selectRows error:", e); }
-        }
+        syncTableSelection(allFeatures);
       }
     });
 
