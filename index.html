@@ -97,6 +97,20 @@
         min-height: 0;
         width: 100%;
       }
+
+      /* ── Brand headers ───────────────────────────────────────────────── */
+      calcite-panel {
+        --calcite-panel-header-background-color: #0e2b4d;
+      }
+      calcite-panel::part(heading) {
+        color: #ffffff;
+      }
+      #feature-table-toolbar {
+        background: #0e2b4d;
+      }
+      #feature-table-toolbar span {
+        color: #ffffff;
+      }
     </style>
     <!-- ArcGIS Maps SDK for JavaScript 5.0 (CDN) — includes calcite, map components, and AI components -->
     <script type="module" src="https://js.arcgis.com/5.0/"></script>
