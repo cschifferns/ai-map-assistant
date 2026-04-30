@@ -188,6 +188,11 @@ function buildGraph() {
       // Prepend map selection context to the last user message when features
       // are selected on the map, so Claude can use them without a tool call.
       const selCtx = selectionManager.getContext();
+      console.log(
+        `[landSurveyAgent] selection: ${selectionManager.getCount()} features,`,
+        `context length: ${selCtx.length} chars,`,
+        `window: ${trimmed.length} messages`,
+      );
       if (selCtx) {
         for (let i = apiMessages.length - 1; i >= 0; i--) {
           if (apiMessages[i].role === "user" && typeof apiMessages[i].content === "string") {
@@ -195,6 +200,7 @@ function buildGraph() {
               ...apiMessages[i],
               content: `${selCtx}\n\n${apiMessages[i].content}`,
             };
+            console.log("[landSurveyAgent] injected selection context into message", i);
             break;
           }
         }
