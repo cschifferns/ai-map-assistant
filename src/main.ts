@@ -121,6 +121,9 @@ mapEl.addEventListener(
 
     const highlights: any[] = [];
 
+    const featureLayers2 = (): any[] =>
+      view.map.allLayers.filter((l: any) => l.type === "feature").toArray();
+
     clearSelection = () => {
       if (sketchVM?.state === "active") sketchVM.cancel();
       highlights.forEach((h: any) => h.remove());
@@ -128,6 +131,8 @@ mapEl.addEventListener(
       sketchLayer.removeAll();
       clearSelBtn.setAttribute("disabled", "");
       selectionManager.clearSelection();
+      // Clear the layer selection model so the feature table deselects rows.
+      featureLayers2().forEach((l: any) => { try { l.clearSelection(); } catch { /* not supported */ } });
     };
 
     sketchVM.on("create", async (event: any) => {
@@ -137,13 +142,15 @@ mapEl.addEventListener(
       highlights.forEach((h: any) => h.remove());
       highlights.length = 0;
       clearSelBtn.setAttribute("disabled", "");
+      // Clear existing layer selections before applying new ones.
+      featureLayers2().forEach((l: any) => { try { l.clearSelection(); } catch { /* not supported */ } });
 
       const allFeatures: any[] = [];
-      const layers: any[] = view.map.allLayers
+      const visibleLayers: any[] = view.map.allLayers
         .filter((l: any) => l.type === "feature" && l.visible)
         .toArray();
 
-      for (const layer of layers) {
+      for (const layer of visibleLayers) {
         try {
           const q = layer.createQuery();
           q.geometry = geometry;
@@ -155,6 +162,8 @@ mapEl.addEventListener(
           const lv = await view.whenLayerView(layer);
           highlights.push(lv.highlight(result.features));
           allFeatures.push(...result.features);
+          // Update the layer's selection model so the feature table reflects the pick.
+          try { await layer.selectFeatures(q, "new"); } catch { /* not supported */ }
         } catch { /* layer doesn't support spatial queries */ }
       }
 
