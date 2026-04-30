@@ -49,6 +49,8 @@ function getAllowedOrigins(env: Env): string[] {
 
 function isAllowedOrigin(origin: string | null, env: Env): boolean {
   if (!origin) return false;
+  // Allow any localhost origin regardless of port for local development.
+  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
   return getAllowedOrigins(env).includes(origin);
 }
 

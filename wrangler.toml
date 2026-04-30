@@ -18,4 +18,4 @@ compatibility_date = "2025-04-01"
 [vars]
 # Comma-separated list of origins allowed to call this proxy.
 # Update to match your GitHub Pages URL after first deploy.
-ALLOWED_ORIGINS = "https://cschifferns.github.io,https://localhost:8080,http://localhost:5173,https://localhost:5173"
+ALLOWED_ORIGINS = "https://cschifferns.github.io"
