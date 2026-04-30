@@ -120,13 +120,8 @@
           <arcgis-expand slot="top-right">
             <arcgis-basemap-gallery></arcgis-basemap-gallery>
           </arcgis-expand>
-        </arcgis-map>
-
-        <!-- Feature table — revealed after the view is ready -->
-        <div id="feature-table-panel">
-          <div id="feature-table-toolbar">
-            <span>Feature Table</span>
-            <calcite-select id="layer-picker" label="Select layer"></calcite-select>
+          <!-- Selection tools — bottom-left of the map -->
+          <div slot="bottom-left" style="display:flex;gap:4px;margin:0 0 8px 8px;">
             <calcite-action
               id="select-rect-btn"
               icon="extent"
@@ -142,6 +137,14 @@
               scale="s"
               disabled>
             </calcite-action>
+          </div>
+        </arcgis-map>
+
+        <!-- Feature table — revealed after the view is ready -->
+        <div id="feature-table-panel">
+          <div id="feature-table-toolbar">
+            <span>Feature Table</span>
+            <calcite-select id="layer-picker" label="Select layer"></calcite-select>
             <calcite-action
               id="collapse-table-btn"
               icon="chevron-down"

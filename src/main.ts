@@ -111,7 +111,10 @@ mapEl.addEventListener(
       // reference-element wires up display but doesn't populate .view on the widget.
       (featureTableEl as any).view = view;
       featureTablePanel.style.display = "flex";
-      tableExpanded = true;
+      featureTablePanel.style.height = "42px"; // Start collapsed — just the toolbar
+      collapseTableBtn.icon = "chevron-up";
+      collapseTableBtn.text = "Expand";
+      tableExpanded = false;
     }
 
     layerPickerEl.addEventListener("calciteSelectChange", () => {
