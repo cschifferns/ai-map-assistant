@@ -111,7 +111,9 @@ mapEl.addEventListener(
     });
 
     if (featureLayers.length > 0) {
-      featureTableEl.layer = featureLayers[0];
+      const defaultLayer = featureLayers.find((l) => l.title === "Easements") ?? featureLayers[0];
+      featureTableEl.layer = defaultLayer;
+      layerPickerEl.value = defaultLayer.id;
       // Set the view so the table's selectionManager initialises.
       // reference-element wires up display but doesn't populate .view on the widget.
       (featureTableEl as any).view = view;
