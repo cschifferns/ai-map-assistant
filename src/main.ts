@@ -94,6 +94,9 @@ mapEl.addEventListener(
       "What layers are in this map?",
       "Zoom to the largest feature.",
       "Summarize the data visible in the current extent.",
+      "What are the key steps to permit a BESS facility on the selected parcels?",
+      "Summarize the easements in the current view.",
+      "What zoning constraints apply to the project site?",
     ];
 
     // Only these layers appear in the feature table picker.
