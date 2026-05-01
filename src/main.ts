@@ -1,5 +1,6 @@
 import { createLandSurveyAgent } from "./agents/landSurveyAgent";
 import { createLandUsePermittingAgent } from "./agents/landUsePermittingAgent";
+import { createGisResearchAgent } from "./agents/gisResearchAgent";
 import { selectionManager } from "./selection/SelectionManager";
 import { initSelectionInjection } from "./selection/useSelectionInjection";
 
@@ -51,6 +52,7 @@ mapEl.setAttribute("item-id", "05e9895fc2b1441f992c28af7547d150");
 const customAgents: { factory: () => any; label: string }[] = [
   { factory: createLandSurveyAgent,                          label: "Land survey" },
   { factory: () => createLandUsePermittingAgent(mapEl),      label: "Land use & permitting" },
+  { factory: createGisResearchAgent,                         label: "GIS & property records" },
 ];
 
 for (const { factory, label } of customAgents) {
