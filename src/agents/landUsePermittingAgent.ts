@@ -63,7 +63,9 @@ consultants, and clients navigating complex approval pathways.
 
 ### Federal Permitting
 - Clean Water Act Section 404 (Army Corps of Engineers):
-  - Nationwide Permits (NWPs) — current 2021 NWPs and applicable regional conditions
+  - Nationwide Permits (NWPs) — 2025 NWP reissuance (effective March 14, 2025) and
+    applicable regional conditions; 2021 NWPs may still govern authorizations issued
+    before the effective date
   - Individual Permits (IPs): standard and letters of permission (LOP)
   - Jurisdictional Determination (JD): approved vs. preliminary; post-Sackett v. EPA
     (2023) implications for "waters of the United States" (WOTUS) definition
@@ -131,6 +133,27 @@ consultants, and clients navigating complex approval pathways.
   Impact (FONSI), EISPN (EIS Preparation Notice), acceptability determination
 - Hawaii Historic Preservation Division (SHPD) Section 6E review
 
+### Energy Storage and Utility-Scale Energy Facilities
+- Battery Energy Storage System (BESS) siting and permitting: NFPA 855 (Standard
+  for the Installation of Stationary Energy Storage Systems) — occupancy classifications,
+  separation distances, maximum aggregate energy ratings per fire area, ventilation
+  requirements, and automatic suppression systems
+- Authority Having Jurisdiction (AHJ) / fire marshal review and approval for BESS;
+  California Fire Code (CFC) Article 120 for large energy storage systems
+- Utility-scale solar, wind, and BESS project entitlements: Conditional Use Permits,
+  General Plan Amendments, and Special Use Permits in agricultural and rural zones
+- California Energy Commission (CEC) certification requirements for large-scale battery
+  storage systems
+- CPUC Rule 21 interconnection and CAISO/IOU generator interconnection queue for
+  utility-scale projects
+- Hazardous materials permits: Unified Program agencies, DTSC, and CalARP threshold
+  analysis for large energy storage
+- CEQA analysis for energy facilities: air quality, biological resources, cultural
+  resources, visual/aesthetic, noise, and hazardous materials impact categories
+- Hawaii: DLNR/BLNR approvals for BESS or renewable energy facilities on conservation
+  land; PUC requirements for grid-connected storage; SMA permit considerations for
+  coastal-adjacent sites
+
 ### Zoning, Entitlements, and Local Planning
 - General Plan: mandatory elements (land use, circulation, housing, conservation,
   open space, noise, safety), optional elements, internal consistency requirement
@@ -151,9 +174,10 @@ consultants, and clients navigating complex approval pathways.
   air protection), CalEnviroScreen screening tool
 
 ## Parcel data lookup
-You have two tools to retrieve parcel data from the current map. **Always call the
-appropriate tool before answering any permitting question about specific parcels** —
-do not rely on conversation context or your own knowledge for parcel attributes.
+You have two tools to retrieve parcel data from the current map. When no selection
+block is present, **always call the appropriate tool before answering any permitting
+question about specific parcels** — do not rely on conversation context or your own
+knowledge for parcel attributes.
 
 1. **query_parcel_attributes** — looks up a parcel by its assessor ID across all
    feature layers. Use when a parcel number (APN, AIN, PIN, folio, or similar) is
@@ -173,9 +197,9 @@ When the user's message begins with a [Selected features...] block, treat those 
 attributes as ground-truth context for the current question. The features may be from
 any layer type — parcels, easements, infrastructure, field observations, CAD data, etc.
 Use the layer name, geometry type, and attribute keys to infer what kind of data you are
-working with and apply your domain knowledge accordingly. If the selected features
-contain APNs or parcel identifiers, you do not need to call query_parcel_attributes —
-the data is already present in the selection block.
+working with and apply your domain knowledge accordingly. **Selection block takes priority:**
+if the selected features contain APNs or parcel identifiers, use that data directly and
+skip any tool calls for that parcel — the data is already present.
 
 ## How to respond
 
@@ -187,7 +211,7 @@ the data is already present in the selection block.
    no headers, no numbered sub-sections.
 3. Exactly one closing line: "Which step would you like me to expand on?"
 
-**Hard limit: 150 words total for initial responses. Do not exceed this.**
+**Hard limit: 250 words total for initial responses. Do not exceed this.**
 
 Only lift the word limit when the user explicitly asks for more detail — e.g. "expand",
 "go deeper", "walk me through step X", "give me the full breakdown", "more detail on Y".
@@ -213,12 +237,14 @@ Only lift the word limit when the user explicitly asks for more detail — e.g. 
   assistant instead.
 - You are not a land surveying expert. For surveying regulations, coordinate systems,
   or boundary law questions, direct the user to the Land Surveying Expert agent.
+- For parcel ownership lookups, zoning portal guidance, or environmental overlay data
+  from .gov databases, direct the user to the GIS & Property Records Research agent.
 `.trim();
 
 // Regex matching common parcel identifier field names across jurisdictions:
 // APN / APN_8 (CA), AIN (LA County), PIN, PARCEL / PARCELNUM / PARCEL_ID,
 // FOLIO / FOLIO_NUM (FL), ASSESSOR / ASSESSOR_PARCEL_NUMBER, PNUM
-const PARCEL_ID_FIELD_RE = /^(apn|ain|pin|parcel|folio|assessor|pnum)/i;
+const PARCEL_ID_FIELD_RE = /^(apn(?:_\d+)?|ain|pin|parcel(?:_?(?:id|num|number))?|folio(?:_num)?|assessor(?:_parcel(?:_number)?)?|pnum)$/i;
 
 const PARCEL_TOOL: Anthropic.Tool = {
   name: "query_parcel_attributes",
@@ -260,6 +286,7 @@ const LAYER_TOOL: Anthropic.Tool = {
     },
     required: ["layer_title"],
   },
+  cache_control: { type: "ephemeral" },
 };
 
 async function queryParcelAttributes(
@@ -267,7 +294,7 @@ async function queryParcelAttributes(
   parcelId: string,
 ): Promise<string> {
   const view = mapEl?.view;
-  if (!view) return "Map view is not ready yet.";
+  if (!view) return "ERROR: Map view is not ready yet.";
 
   // Sanitize: allow digits, letters, dashes, spaces only
   const sanitized = parcelId.replace(/[^\w\s-]/g, "").trim();
@@ -284,6 +311,10 @@ async function queryParcelAttributes(
     .filter((l: any) => l.type === "feature")
     .toArray();
 
+  // Escape single quotes by doubling them (SQL standard) to prevent where-clause injection.
+  const variantList = [...variants].map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
+  const allResults: string[] = [];
+
   for (const layer of featureLayers) {
     try {
       await layer.load();
@@ -291,7 +322,6 @@ async function queryParcelAttributes(
       const idFields = fieldNames.filter((f) => PARCEL_ID_FIELD_RE.test(f));
       if (idFields.length === 0) continue;
 
-      const variantList = [...variants].map((v) => `'${v}'`).join(", ");
       const where = idFields.map((f) => `${f} IN (${variantList})`).join(" OR ");
 
       const query = layer.createQuery();
@@ -303,21 +333,30 @@ async function queryParcelAttributes(
       const result = await layer.queryFeatures(query);
       if (result.features.length === 0) continue;
 
-      return result.features
-        .map((f: any) => {
-          const attrs = Object.entries(f.attributes as Record<string, unknown>)
-            .filter(([, v]) => v !== null && v !== undefined && v !== "")
-            .map(([k, v]) => `${k}: ${v}`)
-            .join("\n");
-          return `Layer: ${layer.title}\n${attrs}`;
-        })
-        .join("\n\n---\n\n");
-    } catch {
+      allResults.push(
+        result.features
+          .map((f: any) => {
+            const attrs = Object.entries(f.attributes as Record<string, unknown>)
+              .filter(([, v]) => v !== null && v !== undefined && v !== "")
+              .map(([k, v]) => `${k}: ${v}`)
+              .join("\n");
+            return `Layer: ${layer.title}\n${attrs}`;
+          })
+          .join("\n\n---\n\n"),
+      );
+    } catch (err) {
+      console.warn(
+        `[landUsePermittingAgent] Layer "${layer.title}" query error:`,
+        err instanceof Error ? err.message : String(err),
+      );
       continue;
     }
   }
 
-  return `No parcel found with ID "${sanitized}" in any map layer.`;
+  if (allResults.length === 0) {
+    return `No parcel found with ID "${sanitized}" in any map layer.`;
+  }
+  return allResults.join("\n\n---\n\n");
 }
 
 async function queryLayerFeatures(
@@ -325,7 +364,7 @@ async function queryLayerFeatures(
   layerTitle: string,
 ): Promise<string> {
   const view = mapEl?.view;
-  if (!view) return "Map view is not ready yet.";
+  if (!view) return "ERROR: Map view is not ready yet.";
 
   const featureLayers: any[] = view.map.allLayers
     .filter((l: any) => l.type === "feature")
@@ -354,7 +393,7 @@ async function queryLayerFeatures(
       return `Layer "${matched.title}" exists but contains no features.`;
     }
 
-    return result.features
+    const featureText = result.features
       .map((f: any, i: number) => {
         const attrs = Object.entries(f.attributes as Record<string, unknown>)
           .filter(([, v]) => v !== null && v !== undefined && v !== "")
@@ -363,6 +402,13 @@ async function queryLayerFeatures(
         return `Feature ${i + 1} — Layer: ${matched.title}\n${attrs}`;
       })
       .join("\n\n---\n\n");
+
+    const suffix =
+      result.features.length >= 20
+        ? "\n\n(Results capped at 20. Layer may contain additional features — use a parcel ID query for more specific results.)"
+        : "";
+
+    return featureText + suffix;
   } catch (err) {
     return `Error querying layer "${matched.title}": ${err instanceof Error ? err.message : String(err)}`;
   }
@@ -439,11 +485,6 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
       // Prepend map selection context to the last user message when features
       // are selected on the map, so Claude can use them without a tool call.
       const selCtx = selectionManager.getContext();
-      console.log(
-        `[landUsePermittingAgent] selection: ${selectionManager.getCount()} features,`,
-        `context length: ${selCtx.length} chars,`,
-        `window: ${trimmed.length} messages`,
-      );
       if (selCtx) {
         for (let i = baseMessages.length - 1; i >= 0; i--) {
           if (baseMessages[i].role === "user" && typeof baseMessages[i].content === "string") {
@@ -451,7 +492,6 @@ function buildGraph(mapEl: HTMLElement & { view: any }) {
               ...baseMessages[i],
               content: `${selCtx}\n\n${baseMessages[i].content}`,
             };
-            console.log("[landUsePermittingAgent] injected selection context into message", i);
             break;
           }
         }

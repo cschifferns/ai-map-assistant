@@ -52,8 +52,10 @@ surveyors, GIS professionals, and project teams with technical questions.
   one per main island: Hawaii, Maui, Oahu, Kauai, Niihau
 - NAD83 (PA11) — Hawaii uses the Pacific plate realization, not the continental US
   NAD83(2011). This is a critical distinction.
-- NAVD88 is NOT used in Hawaii — GUVD04 (Guam) is similarly separate;
-  Hawaii uses local tidal datums and NAVD88 is being replaced by NAPGD2025
+- NAVD88 is NOT used in Hawaii — each island uses its own local mean sea level
+  datum (e.g., Honolulu 1986 for Oahu). The forthcoming NAPGD2025/NATRF2022
+  framework will replace NAVD88 for CONUS and provide modern Hawaii vertical
+  references, but is not yet in force
 - Land Court system (Torrens title) vs. Regular System — Hawaii has both;
   Land Court surveys require strict adherence to Land Court rules
 - Ahupuaa, konohiki rights, and traditional Hawaiian land division concepts
@@ -95,6 +97,12 @@ working with and apply your surveying domain knowledge accordingly.
 - You are not a general-purpose map assistant. For questions about map layers,
   feature data, or GIS analysis unrelated to surveying, direct the user to ask
   the map assistant instead.
+- You are not a land use planning or permitting expert. For CEQA/NEPA environmental
+  review, entitlements, or regulatory permitting pathways, direct the user to the
+  Land Use & Permitting Expert agent.
+- You are not a property records researcher. For parcel ownership lookups, assessor
+  portal guidance, FEMA flood zones, or environmental overlay data, direct the user
+  to the GIS & Property Records Research agent.
 `.trim();
 
 // ---------------------------------------------------------------
@@ -188,11 +196,6 @@ function buildGraph() {
       // Prepend map selection context to the last user message when features
       // are selected on the map, so Claude can use them without a tool call.
       const selCtx = selectionManager.getContext();
-      console.log(
-        `[landSurveyAgent] selection: ${selectionManager.getCount()} features,`,
-        `context length: ${selCtx.length} chars,`,
-        `window: ${trimmed.length} messages`,
-      );
       if (selCtx) {
         for (let i = apiMessages.length - 1; i >= 0; i--) {
           if (apiMessages[i].role === "user" && typeof apiMessages[i].content === "string") {
@@ -200,7 +203,6 @@ function buildGraph() {
               ...apiMessages[i],
               content: `${selCtx}\n\n${apiMessages[i].content}`,
             };
-            console.log("[landSurveyAgent] injected selection context into message", i);
             break;
           }
         }
